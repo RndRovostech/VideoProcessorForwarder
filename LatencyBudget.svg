@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 210" font-family="Calibri, 'Segoe UI', Arial, sans-serif" role="img" aria-label="Latency budget bar chart">
+<rect width="980" height="210" fill="#fff"/>
+<text x="30" y="26" font-size="13" font-weight="700" fill="#22263A">Camera frame → RTP packet on the wire</text>
+<text x="950" y="26" font-size="13" font-weight="700" fill="#22263A" text-anchor="end">127.5 ms total</text>
+<rect x="30.0" y="40" width="786.5" height="42" fill="#22263A"/>
+<text x="423.3" y="66" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">109 ms</text>
+<rect x="816.5" y="40" width="96.7" height="42" fill="#3F4668"/>
+<text x="864.9" y="66" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">13 ms</text>
+<rect x="913.2" y="40" width="28.9" height="42" fill="#5C6178"/>
+<rect x="942.1" y="40" width="7.2" height="42" fill="#8A90A8"/>
+<rect x="949.3" y="40" width="0.7" height="42" fill="#9AA0C4"/>
+<rect x="30" y="40" width="920" height="42" fill="none" stroke="#DDDEE4"/>
+<rect x="30" y="98" width="11" height="11" rx="2" fill="#22263A"/>
+<text x="48" y="108" font-size="11.5" fill="#22263A">Ingest (bridge + decode)</text>
+<text x="330" y="108" font-size="11.5" fill="#5C6178" text-anchor="end">109.0 ms</text>
+<rect x="30" y="122" width="11" height="11" rx="2" fill="#3F4668"/>
+<text x="48" y="132" font-size="11.5" fill="#22263A">Pacer hold</text>
+<text x="330" y="132" font-size="11.5" fill="#5C6178" text-anchor="end">13.4 ms</text>
+<rect x="30" y="146" width="11" height="11" rx="2" fill="#5C6178"/>
+<text x="48" y="156" font-size="11.5" fill="#22263A">Encode + mux</text>
+<text x="330" y="156" font-size="11.5" fill="#5C6178" text-anchor="end">4.0 ms</text>
+<rect x="360" y="98" width="11" height="11" rx="2" fill="#8A90A8"/>
+<text x="378" y="108" font-size="11.5" fill="#22263A">Filters</text>
+<text x="660" y="108" font-size="11.5" fill="#5C6178" text-anchor="end">1.0 ms</text>
+<rect x="360" y="122" width="11" height="11" rx="2" fill="#9AA0C4"/>
+<text x="378" y="132" font-size="11.5" fill="#22263A">Queues</text>
+<text x="660" y="132" font-size="11.5" fill="#5C6178" text-anchor="end">0.1 ms</text>
+<rect x="30" y="168" width="920" height="30" rx="5" fill="#F7F7F9" stroke="#DDDEE4"/>
+<text x="46" y="188" font-size="11.5" fill="#22263A"><tspan font-weight="700">Ingest dominates</tspan> — mostly the inherent cost of receiving and decoding compressed video. It was 611 ms before this work.</text>
+</svg>

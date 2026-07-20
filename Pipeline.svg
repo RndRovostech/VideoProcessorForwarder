@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 300" font-family="Calibri, 'Segoe UI', Arial, sans-serif" role="img" aria-label="Three-stage pipeline diagram">
+<rect width="1000" height="300" fill="#fff"/>
+<text x="30" y="46" font-size="15" font-weight="700" fill="#5C6178" letter-spacing="1.5">CAMERA</text>
+<text x="970" y="46" font-size="15" font-weight="700" fill="#5C6178" letter-spacing="1.5" text-anchor="end">QGROUNDCONTROL</text>
+<rect x="60" y="74" width="230" height="92" rx="9" fill="#F7F7F9" stroke="#DDDEE4"/>
+<rect x="60" y="74" width="230" height="27" rx="9" fill="#22263A"/>
+<rect x="60" y="92" width="230" height="9" fill="#22263A"/>
+<text x="73" y="93" font-size="13" font-weight="700" fill="#fff" letter-spacing="1.2">1  CAPTURE</text>
+<text x="73" y="120" font-size="12" font-weight="700" fill="#22263A">VideoInputThread</text>
+<text x="73" y="138" font-size="11.5" fill="#5C6178">UDP H.264 / RTSP / file</text>
+<text x="73" y="153" font-size="11.5" fill="#5C6178">decode to BGR frames</text>
+<path d="M175.0 166 L175.0 196" stroke="#DDDEE4" stroke-width="1.5" stroke-dasharray="3 3"/>
+<text x="175.0" y="212" font-size="11" fill="#5C6178" text-anchor="middle">raw recording</text>
+<rect x="390" y="74" width="230" height="92" rx="9" fill="#F7F7F9" stroke="#DDDEE4"/>
+<rect x="390" y="74" width="230" height="27" rx="9" fill="#22263A"/>
+<rect x="390" y="92" width="230" height="9" fill="#22263A"/>
+<text x="403" y="93" font-size="13" font-weight="700" fill="#fff" letter-spacing="1.2">2  PROCESS</text>
+<text x="403" y="120" font-size="12" font-weight="700" fill="#22263A">VideoProcessingThread</text>
+<text x="403" y="138" font-size="11.5" fill="#5C6178">resize, white balance,</text>
+<text x="403" y="153" font-size="11.5" fill="#5C6178">CLAHE, telemetry overlay</text>
+<path d="M505.0 166 L505.0 196" stroke="#DDDEE4" stroke-width="1.5" stroke-dasharray="3 3"/>
+<text x="505.0" y="212" font-size="11" fill="#5C6178" text-anchor="middle">preview to screen (15 FPS)</text>
+<rect x="720" y="74" width="230" height="92" rx="9" fill="#F7F7F9" stroke="#DDDEE4"/>
+<rect x="720" y="74" width="230" height="27" rx="9" fill="#22263A"/>
+<rect x="720" y="92" width="230" height="9" fill="#22263A"/>
+<text x="733" y="93" font-size="13" font-weight="700" fill="#fff" letter-spacing="1.2">3  SEND</text>
+<text x="733" y="120" font-size="12" font-weight="700" fill="#22263A">VideoOutputThread</text>
+<text x="733" y="138" font-size="11.5" fill="#5C6178">pace to 30 FPS,</text>
+<text x="733" y="153" font-size="11.5" fill="#5C6178">encode H.264, send RTP</text>
+<path d="M835.0 166 L835.0 196" stroke="#DDDEE4" stroke-width="1.5" stroke-dasharray="3 3"/>
+<text x="835.0" y="212" font-size="11" fill="#5C6178" text-anchor="middle">processed recording</text>
+<path d="M298 120.0 L390 120.0" stroke="#3F4668" stroke-width="2" marker-end="url(#ar)"/>
+<rect x="304" y="94.0" width="72" height="20" rx="4" fill="#fff" stroke="#DDDEE4"/>
+<text x="340" y="108.0" font-size="10.5" fill="#22263A" text-anchor="middle" font-weight="700">queue: 3</text>
+<path d="M628 120.0 L720 120.0" stroke="#3F4668" stroke-width="2" marker-end="url(#ar)"/>
+<rect x="634" y="94.0" width="72" height="20" rx="4" fill="#fff" stroke="#DDDEE4"/>
+<text x="670" y="108.0" font-size="10.5" fill="#22263A" text-anchor="middle" font-weight="700">queue: 3</text>
+<path d="M970 68 L970 56" stroke="#3F4668" stroke-width="2" marker-end="url(#arU)"/>
+<path d="M950 120.0 L970 120.0 L970 68" fill="none" stroke="#3F4668" stroke-width="2"/>
+<path d="M30 56 L30 120.0 L60 120.0" fill="none" stroke="#3F4668" stroke-width="2" marker-end="url(#ar)"/>
+<rect x="30" y="252" width="940" height="30" rx="5" fill="#F7F7F9" stroke="#DDDEE4"/>
+<text x="46" y="272" font-size="11.5" fill="#22263A"><tspan font-weight="700">Queues hold 3 frames and discard the oldest when full</tspan>  —  under load the pipeline drops frames instead of building up delay.</text>
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#3F4668"/></marker><marker id="arU" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#3F4668"/></marker></defs>
+</svg>

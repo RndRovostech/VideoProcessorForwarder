@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Processor Forwarder — System Guide</title>
+<style>
+/* =========================================================================
+   DESIGN SYSTEM  (Rovostech software-documentation style)
+   -------------------------------------------------------------------------
+   Shares its structure -- grid, spacing, cards, tables, A4 print rules -- with
+   the Rovostech field-report style, but is deliberately restrained: near-black
+   graphite carries the document, colour is reserved for status only, and the
+   cover uses a video-scanline motif rather than sonar rings. Field reports are
+   cyan and colourful; software documents are dark and quiet.
+
+     --ink         #14161F  near-black graphite → body text & headings
+     --abyss       #0F1218  almost black        → table header bars
+     --sonar       #3F4668  deep slate-indigo   → rules, markers, borders
+     --sonar-deep  #22263A  dark graphite       → sub-headings, number badges
+     --sonar-light #9AA0C4  pale slate          → accent ON dark backgrounds
+     --sonar-soft  #EEEEF3  neutral light grey  → subtle fills / inline code
+     --steel       #5C6178  muted slate         → secondary/meta text
+     --line        #DDDEE4  neutral hairline    → rules & borders
+     --paper       #FFFFFF  white               → page background
+     --ok / --todo / --risk  muted green/amber/red → status only
+
+   Two accent tokens, and the distinction matters: --sonar is dark, for use on
+   white; --sonar-light is pale, for the cover and dark cards. Using --sonar on
+   a dark background renders it invisible.
+
+   Type: Calibri/Segoe stack (native on Windows, prints crisply, offline-safe).
+   Variable names are kept from the shared system so both stylesheets stay
+   interchangeable -- only the values differ.
+   ========================================================================= */
+
+  :root{
+    --ink:#14161F; --abyss:#0F1218; --sonar:#3F4668; --sonar-deep:#22263A;
+    --sonar-light:#9AA0C4;
+    --sonar-soft:#EEEEF3; --steel:#5C6178; --line:#DDDEE4; --paper:#FFFFFF;
+    --ok:#15694D; --ok-bg:#EAF1EE; --todo:#8F4A12; --todo-bg:#F5EEE6;
+    --flag-bg:#F5E7E7; --flag-line:#9E2F26; --risk:#9E2F26; --risk-bg:#F5E7E7;
+  }
+
+  @page{ size:A4; margin:18mm 16mm 20mm 16mm; }
+  @page:first{ margin:0; }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+
+  body{
+    font-family:"Calibri","Segoe UI","Helvetica Neue",Arial,sans-serif;
+    color:var(--ink); font-size:10.5pt; line-height:1.5; background:var(--paper);
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+
+  /* ============================ COVER ============================ */
+  .cover{
+    position:relative; height:297mm; color:#fff; padding:34mm 22mm;
+    display:flex; flex-direction:column; page-break-after:always; overflow:hidden;
+    background:
+      radial-gradient(circle at 50% 30%, rgba(120,128,170,.16), transparent 58%),
+      linear-gradient(160deg,#1C1F2E 0%, #14161F 55%, #0B0D14 100%);
+  }
+  /* Video scanlines -- the raster motif this application actually works on */
+  .cover::before{
+    content:""; position:absolute; inset:0;
+    background:repeating-linear-gradient(
+      180deg, rgba(150,158,200,.13) 0 1px, transparent 1px 4px);
+    -webkit-mask-image:linear-gradient(180deg, #000 0%, rgba(0,0,0,.35) 55%, transparent 88%);
+            mask-image:linear-gradient(180deg, #000 0%, rgba(0,0,0,.35) 55%, transparent 88%);
+  }
+  .cover-eyebrow{ position:relative; z-index:1; letter-spacing:.32em; text-transform:uppercase;
+    font-size:9.5pt; font-weight:600; color:var(--sonar-light); }
+  .cover-rule{ position:relative; z-index:1; width:48mm; height:3px; background:var(--sonar-light); margin:6mm 0; }
+  .cover h1{ position:relative; z-index:1; font-size:34pt; line-height:1.08; font-weight:700; margin:0 0 4mm; max-width:155mm; }
+  .cover .sub{ position:relative; z-index:1; font-size:13pt; color:#B9BCCC; font-weight:400; max-width:145mm; }
+  .cover-spacer{ flex:1; }
+  .cover-status{
+    position:relative; z-index:1; display:inline-flex; align-items:center; gap:8px;
+    background:rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.28); color:#EDEEF4;
+    padding:4px 12px; border-radius:999px; font-size:9.5pt; font-weight:600; margin-bottom:10mm; width:max-content;
+  }
+  .cover-status .dot{ width:8px; height:8px; border-radius:50%; background:var(--sonar-light); box-shadow:0 0 0 4px rgba(154,160,196,.22); }
+  .cover-meta{
+    position:relative; z-index:1; display:flex; gap:14mm; padding-top:8mm;
+    border-top:1px solid rgba(255,255,255,.18); font-size:9.5pt; flex-wrap:wrap;
+  }
+  .cover-meta .k{ color:var(--sonar-light); text-transform:uppercase; letter-spacing:.12em; font-size:8pt; display:block; margin-bottom:1.5mm; }
+  .cover-meta .v{ color:#EDEEF4; font-size:11pt; font-weight:600; }
+
+  /* ============================ FLOW PAGES ============================ */
+  .section{ page-break-inside:avoid; }
+
+  h2.section-title{ font-size:18pt; font-weight:700; color:var(--ink); margin:0 0 1mm; display:flex; align-items:baseline; gap:7px; }
+  /* Section number is set as part of the heading, not as a chip beside it: a larger
+     numeral in muted slate, baseline-aligned with the title. Keeping it typographic
+     means the only numeric badge in the document is .step-head .sn, so a section
+     number and a step number can never be read as the same kind of thing. */
+  h2.section-title .num{
+    font-size:18pt; font-weight:700; color:var(--sonar); line-height:1;
+    background:none; flex:0 0 auto; font-variant-numeric:tabular-nums;
+    letter-spacing:-.01em;
+  }
+  h2.section-title .num::after{ content:"."; }
+  .section-lead{ color:var(--steel); font-size:10pt; margin:0 0 5mm; max-width:165mm; }
+  hr.rule{ border:0; border-top:2px solid var(--sonar); width:100%; margin:0 0 5mm; opacity:.85; }
+
+  h3.subhead{
+    font-size:12pt; font-weight:700; color:var(--ink); margin:7mm 0 1mm;
+    padding-bottom:1.5mm; border-bottom:2px solid var(--sonar); display:flex; align-items:center; gap:10px;
+  }
+  h3.subhead .badge{ margin-left:auto; }
+
+  /* ---- Summary callout ---- */
+  .summary{
+    background:linear-gradient(180deg,#FAFAFC,#F2F3F6);
+    border:1px solid var(--line); border-left:4px solid var(--sonar);
+    border-radius:8px; padding:6mm 7mm; margin:0 0 8mm;
+  }
+  .summary p{ margin:0 0 3mm; } .summary p:last-child{ margin:0; }
+  .summary strong{ color:var(--sonar-deep); }
+
+  /* ---- Dark header card (introduces a subject block) ---- */
+  .target-head{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:linear-gradient(160deg,#252838,#14161F); color:#fff;
+    border-radius:10px 10px 0 0; padding:5mm 6mm; margin-top:2mm;
+  }
+  .target-head .t-eyebrow{ font-size:8pt; letter-spacing:.18em; text-transform:uppercase; color:var(--sonar-light); display:block; margin-bottom:1.5mm; }
+  .target-head h2{ margin:0; font-size:14pt; font-weight:700; color:#fff; }
+  .target-head .point-tag{ font-size:9pt; font-weight:700; color:#14161F; background:var(--sonar-light); padding:3px 12px; border-radius:999px; white-space:nowrap; }
+
+  /* ---- Info grid: three side-by-side panels (.hazard tints one red) ---- */
+  .info-grid{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:0; border:1px solid var(--line); border-top:0; border-radius:0 0 10px 10px; overflow:hidden; margin-bottom:7mm; page-break-inside:avoid; }
+  .info-grid .panel{ padding:5mm 5.5mm; border-right:1px solid var(--line); }
+  .info-grid .panel:last-child{ border-right:0; }
+  .info-grid .panel.hazard{ background:#FAF4F3; }
+  .panel h4{ margin:0 0 3mm; font-size:9.5pt; text-transform:uppercase; letter-spacing:.08em; color:var(--sonar-deep); display:flex; align-items:center; gap:6px; }
+  .panel.hazard h4{ color:var(--risk); }
+  .panel ul{ margin:0; padding-left:4.5mm; }
+  .panel li{ margin-bottom:1.5mm; font-size:9.5pt; }
+  .panel li::marker{ color:var(--sonar); }
+  .panel.hazard li::marker{ color:var(--risk); }
+
+  /* ---- Note / important callout ---- */
+  .note{
+    display:flex; gap:8px; align-items:flex-start;
+    background:var(--todo-bg); border:1px solid #E4D8C6; border-left:4px solid var(--todo);
+    border-radius:8px; padding:3.5mm 5mm; margin:0 0 7mm; font-size:9.5pt;
+  }
+  .note .ico{ color:var(--todo); font-weight:700; }
+  .note b{ color:var(--todo); }
+
+  /* ---- Numbered step cards ---- */
+  .steps{ margin:0 0 6mm; }
+  .step{
+    border:1px solid var(--line); border-radius:9px; margin-bottom:4mm; overflow:hidden;
+    background:#fff; page-break-inside:avoid;
+  }
+  .step-head{
+    display:flex; align-items:center; gap:10px; padding:3.2mm 5mm;
+    background:#F7F7F9; border-bottom:1px solid var(--line);
+  }
+  /* Step number: subordinate to the section number -- outlined, not filled, and
+     smaller. Weight is what separates the two levels; shape alone was not enough. */
+  .step-head .sn{
+    width:5.6mm; height:5.6mm; flex:0 0 auto; border-radius:50%;
+    background:var(--paper); color:var(--sonar-deep); border:1px solid var(--sonar);
+    font-weight:700; font-size:8.5pt; display:flex; align-items:center; justify-content:center;
+  }
+  .step-head h4{ margin:0; font-size:11.5pt; color:var(--ink); }
+  .step-body{ padding:4mm 5mm; }
+  .step-body p{ margin:0 0 2.5mm; } .step-body p:last-child{ margin:0; }
+  .check{ margin:0 0 2.5mm; }
+  .check .ct{ font-weight:700; color:var(--sonar-deep); font-size:9.5pt; }
+  .check ul{ margin:1mm 0 0; padding-left:4.5mm; }
+  .check li{ font-size:9.5pt; margin-bottom:1mm; }
+  .check li::marker{ color:var(--sonar); }
+  .deliverable{
+    display:inline-flex; align-items:center; gap:6px; margin-top:1.5mm;
+    background:var(--ok-bg); color:var(--ok); border-radius:6px; padding:2mm 4mm; font-size:9pt; font-weight:600;
+  }
+  .deliverable .lbl{ text-transform:uppercase; letter-spacing:.06em; font-size:7.5pt; opacity:.8; }
+
+  /* status badges */
+  .badge{ font-size:8.5pt; font-weight:700; padding:2px 10px; border-radius:999px; white-space:nowrap; letter-spacing:.02em; }
+  .badge.ok{ background:var(--ok-bg); color:var(--ok); }
+  .badge.key{ background:var(--risk-bg); color:var(--risk); }
+
+  /* ============================ TABLE ============================ */
+  table.bom{ width:100%; border-collapse:collapse; font-size:9.5pt; margin:0 0 3mm; page-break-inside:auto; }
+  table.bom thead th{ background:var(--abyss); color:#fff; text-align:left; font-weight:600; padding:3mm 3.5mm; font-size:9pt; letter-spacing:.02em; }
+  table.bom th, table.bom td{ border-bottom:1px solid var(--line); padding:2.8mm 3.5mm; vertical-align:top; }
+  table.bom tbody tr:nth-child(even){ background:#FAFAFB; }
+  caption.fx{ caption-side:top; text-align:left; font-size:8.5pt; color:var(--steel); padding-bottom:2mm; }
+  .cond{ font-weight:700; color:var(--steel); white-space:nowrap; }
+
+  /* ---- Risk management table ---- */
+  table.risk{ width:100%; border-collapse:collapse; font-size:9pt; margin:0 0 7mm; page-break-inside:auto; }
+  table.risk thead th{ background:var(--abyss); color:#fff; text-align:left; font-weight:600; padding:2.8mm 3mm; font-size:8.5pt; letter-spacing:.02em; }
+  table.risk th, table.risk td{ border-bottom:1px solid var(--line); padding:2.6mm 3mm; vertical-align:top; }
+  table.risk tbody tr:nth-child(even){ background:#FAFAFB; }
+  table.risk td.c{ text-align:center; white-space:nowrap; }
+  /* risk-level pills */
+  .lvl{ display:inline-block; font-size:8pt; font-weight:700; padding:1.5px 8px; border-radius:999px; white-space:nowrap; }
+  .lvl.hi{ background:#FBE3E4; color:#491212; }
+  .lvl.med{ background:#FBEFE0; color:#4e2303; }
+  .lvl.low{ background:#E3F3EC; color:#15694D; }
+  .pl{ font-weight:600; color:var(--steel); }
+
+  /* ---- Likelihood × Severity matrix ---- */
+  .matrix-wrap{ display:grid; grid-template-columns:auto 1fr; gap:3mm; align-items:stretch; margin:0 0 4mm; page-break-inside:avoid; }
+  .y-axis{ display:flex; align-items:center; }
+  .y-axis span{ writing-mode:vertical-rl; transform:rotate(180deg); font-size:8pt; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--sonar-deep); }
+  table.matrix{ width:100%; border-collapse:collapse; font-size:8.5pt; table-layout:fixed; }
+  table.matrix th{ font-size:7.5pt; font-weight:700; color:var(--steel); text-transform:uppercase; letter-spacing:.04em; padding:2mm 1mm; text-align:center; }
+  table.matrix th.rowh{ width:20mm; color:var(--sonar-deep); text-align:right; padding-right:3mm; }
+  table.matrix td{ border:2px solid #fff; text-align:center; height:13mm; vertical-align:middle; color:#fff; font-weight:700; font-size:8pt; line-height:1.2; }
+  td.m-low{ background:#15694D; } td.m-med{ background:#D89A2E; } td.m-hi{ background:#B63428; }
+  .x-cap{ text-align:center; font-size:8pt; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--sonar-deep); margin:1mm 0 0; }
+  .mx-legend{ display:flex; gap:5mm; flex-wrap:wrap; font-size:8.5pt; margin:0 0 6mm; }
+  .mx-legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .mx-legend i{ width:11px; height:11px; border-radius:3px; display:inline-block; }
+
+  .endnote{ margin-top:8mm; padding-top:4mm; border-top:1px solid var(--line); font-size:8.5pt; color:var(--steel); }
+  .page-break{ page-break-before:always; }
+
+
+  /* ---- Figures ---- */
+  figure{ margin:0 0 7mm; page-break-inside:avoid; }
+  figure img, figure svg{ width:100%; display:block; }
+  figure img{ border:1px solid var(--line); border-radius:6px; }
+  figcaption{ font-size:8.5pt; color:var(--steel); margin-top:2mm; line-height:1.45; }
+  figcaption b{ color:var(--sonar-deep); }
+
+  /* Annotated screenshot. Pins sit ON the image, so unlike the outlined step
+     badges they are filled with a white ring -- an outline would vanish against
+     screenshot content. Positions are percentages of the image box. */
+  .shot{ position:relative; line-height:0; }
+  .shot .pin{
+    position:absolute; transform:translate(-50%,-50%); line-height:1;
+    width:5.4mm; height:5.4mm; border-radius:50%;
+    background:var(--sonar-deep); color:#fff; box-shadow:0 0 0 1.5px #fff;
+    font-size:8pt; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .shot-key{
+    display:grid; grid-template-columns:1fr 1fr; gap:1.5mm 8mm;
+    margin:3mm 0 0; font-size:9pt;
+  }
+  .shot-key span{ display:flex; align-items:baseline; gap:5px; }
+  .shot-key i{
+    flex:0 0 auto; width:4.6mm; height:4.6mm; border-radius:50%;
+    background:var(--sonar-deep); color:#fff; font-style:normal;
+    font-size:7.5pt; font-weight:700;
+    display:inline-flex; align-items:center; justify-content:center;
+  }
+
+  /* ---- Inline code / identifiers (technical report) ---- */
+  code{
+    font-family:"Consolas","Cascadia Mono","Courier New",monospace;
+    font-size:.92em; background:var(--sonar-soft); color:var(--sonar-deep);
+    padding:.5px 4px; border-radius:4px; white-space:nowrap;
+  }
+  .cover code{ background:rgba(255,255,255,.14); color:#EDEEF4; }
+  table.risk code, table.bom code{ background:#F1F1F5; }
+
+  @media screen{
+    body{ background:#E4EAF0; }
+    .sheet{ background:#fff; max-width:210mm; margin:8mm auto; box-shadow:0 2px 18px rgba(8,38,59,.18); }
+    .flow{ padding:18mm 16mm 20mm; }
+  }
+  @media print{ .flow{ padding:0; } .sheet{ box-shadow:none; } }
+</style>
+</head>
+<body>
+
+<div class="sheet">
+
+  <!-- ============================== COVER ============================== -->
+  <section class="cover">
+    <div class="cover-eyebrow">Rovostech · Video Systems</div>
+    <div class="cover-rule"></div>
+    <h1>Video Processor Forwarder<br>System Guide</h1>
+    <div class="sub">Real-time underwater video processing and forwarding. How to install it, how to use it, and how to add your own image processing.</div>
+
+    <div class="cover-spacer"></div>
+
+    <div class="cover-status"><span class="dot"></span>Stable — Tested and Working</div>
+
+    <div class="cover-meta">
+      <div><span class="k">Date</span><span class="v">20 Jul 2026</span></div>
+      <div><span class="k">Application</span><span class="v">CameraProcessForwarder.py</span></div>
+      <div><span class="k">Test Platform</span><span class="v">Windows 11</span></div>
+      <div><span class="k">Latency</span><span class="v">~128 ms</span></div>
+      <div><span class="k">Extend via</span><span class="v">apply_filters()</span></div>
+    </div>
+  </section>
+
+  <!-- ============================== FLOW ============================== -->
+  <div class="flow">
+
+    <!-- OVERVIEW -->
+    <section class="section">
+      <h2 class="section-title">Overview</h2>
+      <hr class="rule">
+      <div class="summary">
+        <p>This application takes video from a camera, processes, and
+        forwards to <strong>QGroundControl</strong> while optionally recording a local copy. This app have a basic filter image processing to correct <strong>white balance</strong> and/or increase the <strong>contrast/CLAHE</strong>. This application will served as an example program as a starting point for custom image processing.</strong> </p>
+        <p><strong>This guide covers:</strong> installation (section 1), UI explaination
+        (section 2), Process details (section 3), and getting started to extend the app (section 4). Section 5 is a brief note on what was fixed during
+        development and what to avoid.</p>
+      </div>
+    </section>
+
+    <!-- 1. INSTALLATION -->
+    <section class="section">
+      <h2 class="section-title"><span class="num">1</span>Installation</h2>
+      <p class="section-lead">Two external programs and four Python packages. Tested on Windows 11 with Python 3, OpenCV 4.13 and FFmpeg 8.1.</p>
+
+      <h3 class="subhead">Step 1 — External programs</h3>
+      <table class="bom">
+        <caption class="fx">Both must be reachable from the system PATH.</caption>
+        <thead>
+          <tr>
+            <th style="width:30mm">Program</th>
+            <th style="width:56mm">Needed for</th>
+            <th>Required?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><b>FFmpeg</b></td><td>Encoding, transmitting, recording, and reading network video</td><td>Always</td></tr>
+          <tr><td><b>GStreamer</b></td><td>Receiving UDP H.264 from the vehicle</td><td>Only for the UDP H264 source</td></tr>
+          <tr><td><b>Python</b></td><td>Main Programming Language for Development</td><td>Core</td></tr>
+        </tbody>
+      </table>
+
+      <p>GStreamer download — install <b>both</b> the <i>runtime</i> and <i>devel</i> x86_64 MSVC
+      packages:<br>
+      <code>https://gstreamer.freedesktop.org/data/pkg/windows/1.18.6/msvc/</code></p>
+
+      <div class="note">
+        <span class="ico">⚠</span>
+        <div><b>GStreamer 1.18.6 is required as other version is not tested.</b> The application will checks your
+        <code>PATH</code>, the environment variable the installer sets, and the usual install
+        folders on drives (eg. C: to G:). Installation on <code>D:\</code> should works without
+        any configuration.</div>
+      </div>
+
+      <h3 class="subhead">Step 2 — Python Packages</h3>
+      <table class="bom">
+        <thead>
+          <tr>
+            <th style="width:56mm">Command</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>python -m venv venv</code></td><td>Create an isolated environment (Optional)</td></tr>
+          <tr><td><code>venv\Scripts\activate</code></td><td>Activate it (Optional)</td></tr>
+          <tr><td><code>pip install numpy PyQt5 opencv-python opencv-contrib-python</code></td><td>Install the four dependencies</td></tr>
+        </tbody>
+      </table>
+
+      <div class="note">
+        <span class="ico">⚠</span>
+        <div><b>Install <code>opencv-contrib-python</code>, not just <code>opencv-python</code>.</b>
+        The White Balance filter needs the <code>cv2.xphoto</code> module, that is only in the opencv-contrib-python.</div>
+      </div>
+
+      <h3 class="subhead">Step 3 — Run the Application</h3>
+      <p>From the project folder: <code>python CameraProcessForwarder.py</code></p>
+    </section>
+
+    <!-- 2. USING THE APPLICATION -->
+    <section class="section page-break">
+      <h2 class="section-title"><span class="num">2</span>Using the Application</h2>
+      <p class="section-lead">Choose a source, choose an encoder, tick the filters you want, set the destination port, and start.</p>
+
+    <figure>
+      <div class="shot">
+        <img src="AppScreen.png"
+             alt="The application running, receiving a live UDP H.264 stream">
+      <span class="pin" style="left:34.0%; top:5.9%">1</span>
+      <span class="pin" style="left:34.0%; top:21.3%">2</span>
+      <span class="pin" style="left:34.0%; top:40.5%">3</span>
+      <span class="pin" style="left:34.0%; top:50.8%">4</span>
+      <span class="pin" style="left:34.0%; top:65.4%">5</span>
+      <span class="pin" style="left:34.0%; top:81.5%">6</span>
+      <span class="pin" style="left:34.0%; top:88.5%">7</span>
+      <span class="pin" style="left:45.5%; top:36.3%">8</span>
+      </div>
+      <div class="shot-key">
+      <span><i>1</i>Source type and address</span>
+      <span><i>2</i>Hardware decode / encode</span>
+      <span><i>3</i>Processing filters — toggle live</span>
+      <span><i>4</i>Local recording and mode</span>
+      <span><i>5</i>Destination port for QGroundControl</span>
+      <span><i>6</i>Start / stop — red while running</span>
+      <span><i>7</i>Live diagnostic telemetry</span>
+      <span><i>8</i>Latency burned into the video itself</span>
+      </div>
+      <figcaption><b>The application running.</b> A live UDP H.264 feed on port 5000 is being
+      resized to 1080p and forwarded to QGroundControl on port 5600. The telemetry panel reports
+      32.2 FPS in, 1.7 ms of filtering per frame, 6.65 Mbps out and no dropped frames.<br>
+      <b>Encoding and Decoding</b> is recommended using the Nvidia (NVENC & NVDEC).
+      </figcaption>
+
+    </figure>
+
+      <h3 class="subhead">Video sources</h3>
+      <table class="bom">
+        <thead>
+          <tr>
+            <th style="width:30mm">Source</th>
+            <th style="width:52mm">Input</th>
+            <th>Example</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><b>UDP H264</b></td><td>Port number</td><td><code>5000</code></td></tr>
+          <tr><td><b>RTSP</b></td><td>Full camera IP address</td><td><code>rtsp://192.168.2.160:554</code></td></tr>
+          <tr><td><b>Video_File</b></td><td>Path to an MP4 or MKV</td><td><code>./UnderwaterVideoPlayback720.mp4</code></td></tr>
+        </tbody>
+      </table>
+
+      <div class="note">
+        <span class="ico">⚠</span>
+        <div><b>UDP H264 also uses the next port up.</b> Entering <code>5000</code> means the
+        application occupies <code>5001</code> as well. Keep the port free.</div>
+      </div>
+
+      <h3 class="subhead">ROV Settings</h3>
+      <p>Default camera destination/stream endpoint in ROV setting is usually 192.168.2.1:5600, change it to 5000 (or other available port). It is possible to send the raw camera feed to multiple endpoint (eg. same IP, different port) to feed the qgroundcontrol with the raw data instead of the processed data.</p>
+      <img src="ROVVideoStreamSetting.png" alt="ROV Video Stream Settings">
+      
+      <h3 class="subhead">Recording</h3>
+      <table class="bom">
+        <caption class="fx">Recordings enable to save the processed or the original video.</caption>
+        <thead>
+          <tr>
+            <th style="width:34mm">Mode</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><b>Processed</b></td><td>Saved the filtered/processed frames</td></tr>
+          <tr><td><b>Raw Original</b></td><td>Original frames without filter</td></tr>
+        </tbody>
+      </table>
+
+      <h3 class="subhead">Telemetry Detail</h3>
+      <table class="bom">
+        <thead>
+          <tr>
+            <th style="width:42mm">Context</th>
+            <th style="width:56mm">Details</th>
+            <th>Healthy</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><b>Input Stream Rate</b></td><td>Frames arriving from the camera</td><td>Steady, match the camera</td></tr>
+          <tr><td><b>Processing Overhead</b></td><td>Time spent filtering one frame</td><td> &lt; 80 ms</td></tr>
+          <tr><td><b>Network Bitrate</b></td><td>Actual data crossing the tether</td><td> &lt; 50MBps </td></tr>
+          <tr><td><b>Dropped Frames</b></td><td>Frames discarded due to delays</td><td>0, low</td></tr>
+        </tbody>
+      </table>
+
+      <p><b>Watch Processing Overhead while developing a filter.</b> This will shows the delay due to processing. 
+        If the average value is more than 80ms, the program should be modified to feed the unprocessed data to the QGroundControl for pilot view</p>
+
+      <h3 class="subhead">Troubleshooting</h3>
+      <table class="bom">
+        <caption class="fx">The specific error message will shown if FFmpeg or GStreamer fails. Below is the error message list and the cause</caption>
+        <thead>
+          <tr>
+            <th style="width:62mm">Message or symptom</th>
+            <th>Cause</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>Could not find GStreamer installation</code></td><td>Not installed, or not on your root drive (eg. <code>C:/gstreamer</code>)</td></tr>
+          <tr><td><code>'x' is not a valid UDP port</code></td><td>For UDP H264, type a port number, not a full address</td></tr>
+          <tr><td><code>Error: FFmpeg could not open ...</code></td><td>Nothing to transmit, or the port is already in use</td></tr>
+          <tr><td>No changes after white balance or CLAHE check</td><td><code>opencv-contrib-python</code> might be missing, check the console warning</td></tr>
+          <tr><td>Nothing appears in QGroundControl</td><td>QGC not set to <i>UDP h.264</i> on the same port</td></tr>
+          <tr><td>Video freezes or tears after a glitch</td><td>Tether packet loss; a keyframe is sent every second to recover</td></tr>
+          <tr><td>Your own filter crashes</td><td>The traceback is printed to the console, not shown in the window</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 3. HOW THE SYSTEM WORKS -->
+    <section class="section page-break">
+      <h2 class="section-title"><span class="num">3</span>How the System Works</h2>
+      <p class="section-lead">There are 3 steps to process the camera feed: Retrieve, process and send. Each process is running parallel to the others.</p>
+
+      <figure>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 300" font-family="Calibri, 'Segoe UI', Arial, sans-serif" role="img" aria-label="Three-stage pipeline diagram">
+<rect width="1000" height="300" fill="#fff"/>
+<text x="30" y="46" font-size="15" font-weight="700" fill="#5C6178" letter-spacing="1.5">CAMERA</text>
+<text x="970" y="46" font-size="15" font-weight="700" fill="#5C6178" letter-spacing="1.5" text-anchor="end">QGROUNDCONTROL</text>
+<rect x="60" y="74" width="230" height="92" rx="9" fill="#F7F7F9" stroke="#DDDEE4"/>
+<rect x="60" y="74" width="230" height="27" rx="9" fill="#22263A"/>
+<rect x="60" y="92" width="230" height="9" fill="#22263A"/>
+<text x="73" y="93" font-size="13" font-weight="700" fill="#fff" letter-spacing="1.2">1  CAPTURE</text>
+<text x="73" y="120" font-size="12" font-weight="700" fill="#22263A">VideoInputThread</text>
+<text x="73" y="138" font-size="11.5" fill="#5C6178">UDP H.264 / RTSP / file</text>
+<text x="73" y="153" font-size="11.5" fill="#5C6178">decode to BGR frames</text>
+<path d="M175.0 166 L175.0 196" stroke="#DDDEE4" stroke-width="1.5" stroke-dasharray="3 3"/>
+<text x="175.0" y="212" font-size="11" fill="#5C6178" text-anchor="middle">raw recording</text>
+<rect x="390" y="74" width="230" height="92" rx="9" fill="#F7F7F9" stroke="#DDDEE4"/>
+<rect x="390" y="74" width="230" height="27" rx="9" fill="#22263A"/>
+<rect x="390" y="92" width="230" height="9" fill="#22263A"/>
+<text x="403" y="93" font-size="13" font-weight="700" fill="#fff" letter-spacing="1.2">2  PROCESS</text>
+<text x="403" y="120" font-size="12" font-weight="700" fill="#22263A">VideoProcessingThread</text>
+<text x="403" y="138" font-size="11.5" fill="#5C6178">resize, white balance,</text>
+<text x="403" y="153" font-size="11.5" fill="#5C6178">CLAHE, telemetry overlay</text>
+<path d="M505.0 166 L505.0 196" stroke="#DDDEE4" stroke-width="1.5" stroke-dasharray="3 3"/>
+<text x="505.0" y="212" font-size="11" fill="#5C6178" text-anchor="middle">preview to screen (15 FPS)</text>
+<rect x="720" y="74" width="230" height="92" rx="9" fill="#F7F7F9" stroke="#DDDEE4"/>
+<rect x="720" y="74" width="230" height="27" rx="9" fill="#22263A"/>
+<rect x="720" y="92" width="230" height="9" fill="#22263A"/>
+<text x="733" y="93" font-size="13" font-weight="700" fill="#fff" letter-spacing="1.2">3  SEND</text>
+<text x="733" y="120" font-size="12" font-weight="700" fill="#22263A">VideoOutputThread</text>
+<text x="733" y="138" font-size="11.5" fill="#5C6178">pace to 30 FPS,</text>
+<text x="733" y="153" font-size="11.5" fill="#5C6178">encode H.264, send RTP</text>
+<path d="M835.0 166 L835.0 196" stroke="#DDDEE4" stroke-width="1.5" stroke-dasharray="3 3"/>
+<text x="835.0" y="212" font-size="11" fill="#5C6178" text-anchor="middle">processed recording</text>
+<path d="M298 120.0 L390 120.0" stroke="#3F4668" stroke-width="2" marker-end="url(#ar)"/>
+<rect x="304" y="94.0" width="72" height="20" rx="4" fill="#fff" stroke="#DDDEE4"/>
+<text x="340" y="108.0" font-size="10.5" fill="#22263A" text-anchor="middle" font-weight="700">queue: 3</text>
+<path d="M628 120.0 L720 120.0" stroke="#3F4668" stroke-width="2" marker-end="url(#ar)"/>
+<rect x="634" y="94.0" width="72" height="20" rx="4" fill="#fff" stroke="#DDDEE4"/>
+<text x="670" y="108.0" font-size="10.5" fill="#22263A" text-anchor="middle" font-weight="700">queue: 3</text>
+<path d="M970 68 L970 56" stroke="#3F4668" stroke-width="2" marker-end="url(#arU)"/>
+<path d="M950 120.0 L970 120.0 L970 68" fill="none" stroke="#3F4668" stroke-width="2"/>
+<path d="M30 56 L30 120.0 L60 120.0" fill="none" stroke="#3F4668" stroke-width="2" marker-end="url(#ar)"/>
+<rect x="30" y="252" width="940" height="30" rx="5" fill="#F7F7F9" stroke="#DDDEE4"/>
+<text x="46" y="272" font-size="11.5" fill="#22263A"><tspan font-weight="700">Queues hold 3 frames and discard the oldest when full</tspan>  —  under load the pipeline drops frames instead of building up delay.</text>
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#3F4668"/></marker><marker id="arU" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#3F4668"/></marker></defs>
+</svg>
+      </figure>
+
+      <table class="bom">
+        <!-- <caption class="fx">Each stage is a Python thread. Queues hold 3 frames and discard the oldest when full.</caption> -->
+        <thead>
+          <tr>
+            <th style="width:30mm">Stage</th>
+            <th style="width:44mm">Class</th>
+            <th>Responsibility</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>1. Retrieve</td><td><code>VideoInputThread</code></td><td>Get the camera data in UDP H.264, RTSP or a file into BGR frames.</td></tr>
+          <tr><td>2. Process</td><td><code>VideoProcessingThread</code></td><td>Run the image filters, measure the processing time, and feeding the preview.</td></tr>
+          <tr><td>3. Send</td><td><code>VideoOutputThread</code></td><td>Encode and send processed camera videos using FFmpeg, transmit as RTP.</td></tr>
+        </tbody>
+      </table>
+
+      <!-- <div class="target-head">
+        <div>
+          <span class="t-eyebrow">Stage 1</span>
+          <h2>Getting camera data</h2>
+        </div>
+        <span class="point-tag">INGEST</span>
+      </div>
+      <div class="info-grid">
+        <div class="panel">
+          <h4>◎ Video file</h4>
+          <ul>
+            <li>Read with OpenCV</li>
+            <li>Needs seeking, so it can loop</li>
+            <li>Latency irrelevant</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h4>◷ RTSP camera</h4>
+          <ul>
+            <li>Read by FFmpeg directly</li>
+            <li>Low-latency flags applied</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h4>▶ UDP H.264</h4>
+          <ul>
+            <li>GStreamer unpacks RTP</li>
+            <li>Republished locally as MPEG-TS</li>
+            <li>FFmpeg decodes to BGR</li>
+          </ul>
+        </div>
+      </div> -->
+
+      <!-- <p>For the usual ROV case the data takes two hops before it becomes pixels:</p>
+      <table class="bom">
+        <thead>
+          <tr>
+            <th style="width:46mm">Step</th>
+            <th style="width:32mm">Carried as</th>
+            <th>Performed by</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>ROV camera → <code>udp:5000</code></td><td>RTP / H.264</td><td>The vehicle</td></tr>
+          <tr><td><code>udp:5000</code> → <code>udp:5001</code></td><td>MPEG-TS</td><td>GStreamer bridge — unpacks RTP, repacks as a stream FFmpeg reads reliably</td></tr>
+          <tr><td><code>udp:5001</code> → BGR frames</td><td>Raw pixels</td><td><code>FFmpegFrameReader</code> — decodes H.264</td></tr>
+        </tbody>
+      </table> -->
+
+      <!-- <div class="target-head">
+        <div>
+          <span class="t-eyebrow">Stage 2</span>
+          <h2>Processing data</h2>
+        </div>
+        <span class="point-tag">THE EXTENSION POINT</span>
+      </div>
+      <div class="info-grid">
+        <div class="panel">
+          <h4>◎ Resize</h4>
+          <ul>
+            <li>Scales to 1920×1080</li>
+            <li>Standardises the output</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h4>◷ White Balance</h4>
+          <ul>
+            <li>Grayworld correction</li>
+            <li>Restores red and yellow absorbed by the water column</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h4>▶ CLAHE</h4>
+          <ul>
+            <li>Adaptive local contrast</li>
+            <li>Reveals shapes in murky or dim water</li>
+          </ul>
+        </div>
+      </div> -->
+
+      <p>The loop is deliberately simple: take a frame, normalise it to 3-channel BGR, run
+      <code>apply_filters()</code>, time it, draw the result onto the frame, pass it on, and
+      update the preview at most 15 times a second.</p>
+
+      <figure>
+        <img src="FilterComparison.jpg" alt="The same underwater frame with each filter applied">
+        <figcaption>White balance restores the sand and fish to natural
+        colour; CLAHE lifts local contrast, separate object from the background. Both can be combined.</figcaption>
+      </figure>
+
+
+      <!-- <div class="target-head">
+        <div>
+          <span class="t-eyebrow">Stage 3</span>
+          <h2>Sending data</h2>
+        </div>
+        <span class="point-tag">OUTPUT</span>
+      </div>
+      <div class="info-grid">
+        <div class="panel">
+          <h4>◎ Encode</h4>
+          <ul>
+            <li>Frames piped into FFmpeg</li>
+            <li>H.264, <code>yuv420p</code></li>
+            <li>Keyframe every second</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h4>◷ Transmit</h4>
+          <ul>
+            <li>RTP to the configured port</li>
+            <li>Read by QGroundControl</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h4>▶ Pace</h4>
+          <ul>
+            <li>Held to a true 30 FPS</li>
+            <li>Newest frame repeated if starved</li>
+            <li>Keeps the stream clock honest</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3 class="subhead">The queues — why the system behaves as it does</h3>
+      <p>The stages never call each other. They pass frames through queues that hold
+      <b>three frames and discard the oldest when full</b>. That single rule defines the
+      system's behaviour under load.</p>
+
+      <table class="bom">
+        <thead>
+          <tr>
+            <th style="width:56mm">Condition</th>
+            <th>What happens</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>All stages keeping up</td><td>Frames flow straight through; queues stay near empty</td></tr>
+          <tr><td>Processing too slow</td><td>Oldest frames discarded at the input queue — the pilot still sees current video</td></tr>
+          <tr><td>Encoder or network too slow</td><td>Oldest frames discarded at the output queue; the pacer repeats what it has</td></tr>
+          <tr><td>Source slower than 30 FPS</td><td>Pacer repeats the newest frame so the stream clock stays locked to real time</td></tr>
+        </tbody>
+      </table>
+
+      <div class="note">
+        <span class="ico">⚠</span>
+        <div><b>Slow processing costs frames, not delay.</b> For live pilot video this is the
+        correct trade — a two-second-old frame is worthless. It is also the safety net for your
+        own algorithm: an expensive filter degrades smoothness, never real-time behaviour.</div>
+      </div> -->
+
+      <figure>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 210" font-family="Calibri, 'Segoe UI', Arial, sans-serif" role="img" aria-label="Latency budget bar chart">
+<rect width="980" height="210" fill="#fff"/>
+<text x="30" y="26" font-size="13" font-weight="700" fill="#22263A">Camera frame → RTP packet on the wire</text>
+<text x="950" y="26" font-size="13" font-weight="700" fill="#22263A" text-anchor="end">127.5 ms total</text>
+<rect x="30.0" y="40" width="786.5" height="42" fill="#22263A"/>
+<text x="423.3" y="66" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">109 ms</text>
+<rect x="816.5" y="40" width="96.7" height="42" fill="#3F4668"/>
+<text x="864.9" y="66" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">13 ms</text>
+<rect x="913.2" y="40" width="28.9" height="42" fill="#5C6178"/>
+<rect x="942.1" y="40" width="7.2" height="42" fill="#8A90A8"/>
+<rect x="949.3" y="40" width="0.7" height="42" fill="#9AA0C4"/>
+<rect x="30" y="40" width="920" height="42" fill="none" stroke="#DDDEE4"/>
+<rect x="30" y="98" width="11" height="11" rx="2" fill="#22263A"/>
+<text x="48" y="108" font-size="11.5" fill="#22263A">Ingest (bridge + decode)</text>
+<text x="330" y="108" font-size="11.5" fill="#5C6178" text-anchor="end">109.0 ms</text>
+<rect x="30" y="122" width="11" height="11" rx="2" fill="#3F4668"/>
+<text x="48" y="132" font-size="11.5" fill="#22263A">Pacer hold</text>
+<text x="330" y="132" font-size="11.5" fill="#5C6178" text-anchor="end">13.4 ms</text>
+<rect x="30" y="146" width="11" height="11" rx="2" fill="#5C6178"/>
+<text x="48" y="156" font-size="11.5" fill="#22263A">Encode + mux</text>
+<text x="330" y="156" font-size="11.5" fill="#5C6178" text-anchor="end">4.0 ms</text>
+<rect x="360" y="98" width="11" height="11" rx="2" fill="#8A90A8"/>
+<text x="378" y="108" font-size="11.5" fill="#22263A">Filters</text>
+<text x="660" y="108" font-size="11.5" fill="#5C6178" text-anchor="end">1.0 ms</text>
+<rect x="360" y="122" width="11" height="11" rx="2" fill="#9AA0C4"/>
+<text x="378" y="132" font-size="11.5" fill="#22263A">Queues</text>
+<text x="660" y="132" font-size="11.5" fill="#5C6178" text-anchor="end">0.1 ms</text>
+<rect x="30" y="168" width="920" height="30" rx="5" fill="#F7F7F9" stroke="#DDDEE4"/>
+<text x="46" y="188" font-size="11.5" fill="#22263A"><tspan font-weight="700">Ingest dominates</tspan> — mostly the inherent cost of receiving and decoding compressed video. It was 611 ms before this work.</text>
+</svg>
+        <figcaption><b>Where the delay goes.</b> Measured by tagging individual frames and
+        timestamping every stage transition; ingest measured separately with a black-to-white
+        flip test. QGroundControl adds its own buffering on top, typically 100–200 ms, which is
+        outside this application's control.</figcaption>
+      </figure>
+
+      <p>Measured end to end, camera frame to network packet: <b>about 128 ms</b>, of which
+      ~109 ms is the unavoidable cost of receiving and decoding incoming compressed video.
+      QGroundControl adds its own buffering on top, usually 100–200 ms, outside this
+      application's control.</p>
+    </section>
+
+    <!-- 4. ADDING YOUR OWN IMAGE PROCESSING -->
+    <section class="section page-break">
+      <h2 class="section-title"><span class="num">4</span>Custom Image Processing</h2>
+      <p class="section-lead">Custom image processing is implemented in the VideoProcessingThread class, apply_filter function.</p>
+
+      <h3 class="subhead">Function: apply_filters</h3>
+      <p><code>VideoProcessingThread.apply_filters(frame)</code> receives an OpenCV BGR image
+      and returns one. Any OpenCV, NumPy or machine-learning code can go inside it. There are
+      two ways to use it:</p>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-head"><span class="sn">1</span><h4>Edit the apply_filters() method</h4></div>
+          <div class="step-body">
+            <p>Open <code>CameraProcessForwarder.py</code>, find <code>apply_filters()</code>, and add your stages
+            where the comment marks the spot. Simplest approach for a private build.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-head"><span class="sn">2</span><h4>Subclass VideoProcessingThread</h4></div>
+          <div class="step-body">
+            <p>Subclass <code>VideoProcessingThread</code> and override
+            <code>apply_filters()</code>. Inherit using <code>super().apply_filters(frame)</code> and modify as needed.</p>
+            </div>
+        </div>
+      </div>
+
+      <!-- <h3 class="subhead">The contract — five rules</h3>
+      <table class="risk">
+        <caption class="fx">Breaking rules 1 or 4 causes failures that are not obvious from the application window.</caption>
+        <thead>
+          <tr>
+            <th style="width:14mm" class="c">Rule</th>
+            <th style="width:52mm">Requirement</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="c"><span class="lvl hi">1</span></td>
+            <td>Return BGR <code>uint8</code>, 3 channels</td>
+            <td>Convert back before returning if you work in greyscale, HSV or LAB — otherwise the encoder rejects the frame.</td>
+          </tr>
+          <tr>
+            <td class="c"><span class="lvl med">2</span></td>
+            <td>Keep the frame size consistent</td>
+            <td>Stream geometry locks to the first frame; later changes are rescaled and waste work.</td>
+          </tr>
+          <tr>
+            <td class="c"><span class="lvl med">3</span></td>
+            <td>Stay under 33 ms per frame</td>
+            <td>Watch <i>Processing Overhead</i>. Slower is not fatal — frames are dropped, not queued — but the video becomes choppy.</td>
+          </tr>
+          <tr>
+            <td class="c"><span class="lvl hi">4</span></td>
+            <td>Never touch Qt widgets from this method</td>
+            <td>It runs on a worker thread. Use <code>self.stats_callback(...)</code> to send values to the window safely.</td>
+          </tr>
+          <tr>
+            <td class="c"><span class="lvl low">5</span></td>
+            <td>Build expensive objects once in <code>__init__</code></td>
+            <td>Not per frame. See how <code>self.clahe</code> is constructed.</td>
+          </tr>
+        </tbody>
+      </table> -->
+
+      <h3 class="subhead">Show the Custom Filter</h3>
+      <p>The filters can be activated using checkbox and activated by config/filter name. The name of the filter can be set using the <code>proc_config</code> in the <code>ROVProcessorApp</code>.</p>
+      <table class="bom">
+        <thead>
+          <tr>
+            <th style="width:16mm" class="c">Step</th>
+            <th style="width:52mm">Method</th>
+            <th>Details</th>
+            <th>Reference</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="c">1</td><td><code>ROVProcessorApp.__init__</code></td><td>A default in <code>proc_config</code>, e.g. <code>"my_filter": False</code></td><td><img src="Proc_config.png" alt="" width="200"></td></tr>
+          <tr><td class="c">2</td><td><code>initUI</code></td><td>The <code>QCheckBox</code>, added to the layout and connected to event<code>sync_config</code></td><td><img src="initUICheckbox.png" alt="" width="200"></td></tr>
+          <tr><td class="c">3</td><td><code>sync_config</code></td><td>Copy the checkbox state into <code>proc_config</code></td><td><img src="sync_config.png" alt="" width="200"></td></tr>
+        </tbody>
+      </table>
+      <p>Then read it in your filter with <code>if self.config["my_filter"]:</code>. The value
+      updates live, so the algorithm can be toggled while video is running.</p>
+
+      <!-- <h3 class="subhead">Where other kinds of change belong</h3>
+      <table class="bom">
+        <thead>
+          <tr>
+            <th style="width:66mm">Goal</th>
+            <th>Location</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Change how the picture looks</td><td><code>apply_filters()</code></td></tr>
+          <tr><td>Detect something and report a number</td><td><code>apply_filters()</code>, then <code>self.stats_callback(...)</code></td></tr>
+          <tr><td>Draw boxes, text or masks on the video</td><td><code>apply_filters()</code> — it is a normal OpenCV image</td></tr>
+          <tr><td>Support a new camera or protocol</td><td><code>VideoInputThread.open_source()</code></td></tr>
+          <tr><td>Change encoding or streaming</td><td><code>VideoOutputThread.start_ffmpeg()</code></td></tr>
+        </tbody>
+      </table>
+
+      <div class="note">
+        <span class="ico">⚠</span>
+        <div><b>Develop against a video file.</b> The <i>Video_File</i> source loops forever and
+        replays identical frames every run, so an algorithm can be iterated quickly with no
+        camera and no network. Switch to the live source once it works.</div>
+      </div>
+    </section> -->
+
+    <!-- 5. NOTES FROM DEVELOPMENT -->
+    <!-- <section class="section page-break">
+      <h2 class="section-title"><span class="num">5</span>Notes from Development</h2>
+      <p class="section-lead">A brief summary of what was repaired and what to avoid. Full detail is kept separately in CHANGELOG.md.</p>
+
+      <h3 class="subhead">What was fixed</h3>
+      <p>The application was reviewed and repaired in July 2026. Fourteen defects were found
+      and corrected, and end-to-end latency was reduced from about <b>630 ms to 128 ms</b>.</p>
+
+      <table class="bom">
+        <caption class="fx">Grouped by type. Every fix was verified by measurement rather than inspection.</caption>
+        <thead>
+          <tr>
+            <th style="width:44mm">Area</th>
+            <th style="width:14mm" class="c">Count</th>
+            <th>Examples</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Stream-breaking faults</td><td class="c">5</td><td>An unread error pipe would freeze the encoder permanently; the output was encoded in a colour format QGroundControl cannot play</td></tr>
+          <tr><td>Silent data loss</td><td class="c">3</td><td>"Raw Original" recording produced 0-byte files; recordings were truncated and played at the wrong speed</td></tr>
+          <tr><td>Incorrect telemetry</td><td class="c">3</td><td>Network bitrate was overstated ~70×; the dropped-frame counter always read zero</td></tr>
+          <tr><td>Latency</td><td class="c">3</td><td>Delay grew steadily during a dive; a hidden half-second of buffering in the video reader</td></tr>
+        </tbody>
+      </table>
+
+      <div class="note">
+        <span class="ico">⚠</span>
+        <div><b>If the video ever looks late again</b>, the distinction that matters is this: a
+        <b>constant</b> delay is QGroundControl's own buffer and is normal. A delay that
+        <b>grows the longer you fly</b> is a fault in the output pacing and should be
+        investigated.</div>
+      </div>
+
+      <h3 class="subhead">What to do</h3>
+      <div class="info-grid" style="border-radius:10px; border-top:1px solid var(--line);">
+        <div class="panel">
+          <h4>◎ Test with a file first</h4>
+          <ul>
+            <li>Loops forever, fully repeatable</li>
+            <li>No camera or network needed</li>
+            <li>Switch to live once it works</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h4>◷ Watch the overhead</h4>
+          <ul>
+            <li>Keep filters under 33 ms</li>
+            <li>Check the console for warnings</li>
+            <li>Use a hardware encoder if tight</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h4>▶ Measure, do not assume</h4>
+          <ul>
+            <li>Time changes before keeping them</li>
+            <li>Several "obvious" fixes made things worse</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3 class="subhead">What to avoid</h3>
+      <p>These all look like sensible improvements and are not. Each was tried and measured
+      during development.</p>
+
+      <table class="risk">
+        <thead>
+          <tr>
+            <th style="width:56mm">Do not</th>
+            <th style="width:20mm" class="c">Verdict</th>
+            <th>Why</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Use <code>cv2.VideoCapture</code> for live network video</td>
+            <td class="c"><span class="lvl hi">Avoid</span></td>
+            <td>It buffers ~0.6 s and ignores every low-latency option, including its own documented environment variable. Drive FFmpeg directly instead.</td>
+          </tr>
+          <tr>
+            <td>Apply wallclock timestamps to the outgoing stream</td>
+            <td class="c"><span class="lvl hi">Avoid</span></td>
+            <td>Measured <b>838 ms worse</b>. They are correct for recordings, which is a different problem.</td>
+          </tr>
+          <tr>
+            <td>Leave a subprocess error pipe unread</td>
+            <td class="c"><span class="lvl hi">Avoid</span></td>
+            <td>FFmpeg fills the 64 KB buffer within a minute and then blocks forever. Always drain it.</td>
+          </tr>
+          <tr>
+            <td>Change the frame size mid-stream</td>
+            <td class="c"><span class="lvl med">Careful</span></td>
+            <td>The encoder is fed headerless raw video; geometry is locked at the first frame for this reason.</td>
+          </tr>
+          <tr>
+            <td>Assume the source frame rate matches the output</td>
+            <td class="c"><span class="lvl med">Careful</span></td>
+            <td>If they differ and pacing is removed, the stream clock drifts and delay grows without limit.</td>
+          </tr>
+        </tbody>
+      </table> -->
+
+      <p class="endnote">Rovostech · Video Processor Forwarder · System Guide · 20 Jul 2026 · Full change history in CHANGELOG.md</p>
+    </section>
+
+  </div><!-- /flow -->
+</div><!-- /sheet -->
+
+</body>
+</html>
