@@ -1,13 +1,11 @@
 # Rovostech Video Processor Forwarder
 
-Real-time video processing and forwarding for ROVs, USVs and subsea work.
+Real-time video processing and forwarding for ROVs, USVs and subsea work. Takes video from a
+camera, processes it for underwater viewing, and forwards it to **QGroundControl** — optionally
+recording a local copy.
 
-It takes video from a camera, processes it for underwater viewing, and forwards it to
-**QGroundControl** — while optionally recording a local copy.
-
-It is also a **starting point for your own image processing.** Capture, threading, encoding
-and streaming are already built and measured. You write one function and your algorithm runs
-on live video.
+It is also a **starting point for your own image processing.** Capture, threading, encoding and
+streaming are already built and measured; you write one function.
 
 **Run it with:** `python CameraProcessForwarder.py`
 
@@ -19,8 +17,9 @@ on live video.
 2. **[How to use it](#2-how-to-use-it)**
 3. **[How the system works](#3-how-the-system-works)**
 4. **[Add your own image processing](#4-add-your-own-image-processing)** ← start here to extend
-5. [Notes from development](#5-notes-from-development) — brief
-6. [Known limitations](#6-known-limitations)
+5. [Build a standalone executable](#5-build-a-standalone-executable)
+6. [Notes from development](#6-notes-from-development)
+7. [Known limitations](#7-known-limitations)
 
 ---
 
@@ -33,14 +32,12 @@ on live video.
 | **FFmpeg** | Encoding, transmitting, recording, reading network video | Always |
 | **GStreamer** | Receiving UDP H.264 | Only for the UDP H264 source |
 
-Both must be on your system `PATH`.
+Both must be on your system `PATH`. For GStreamer install **both** the *runtime* and *devel*
+x86_64 MSVC packages: <https://gstreamer.freedesktop.org/data/pkg/windows/1.18.6/msvc/>
 
-GStreamer download — install **both** the *runtime* and *devel* x86_64 MSVC packages:
-<https://gstreamer.freedesktop.org/data/pkg/windows/1.18.6/msvc/>
-
-> **GStreamer is found automatically.** The app checks your `PATH`, the environment variable
-> the installer sets, and the usual folders on drives C: through G: — so an install on `D:\`
-> works without any configuration.
+> **GStreamer is found automatically.** The app checks your `PATH`, the environment variable the
+> installer sets, and the usual folders on drives C: through G: — so an install on `D:\` works
+> without any configuration.
 
 ## Step 2 — Python packages
 
@@ -51,9 +48,9 @@ venv\Scripts\activate
 pip install numpy PyQt5 opencv-python opencv-contrib-python
 ```
 
-> **Install `opencv-contrib-python`, not just `opencv-python`.**
-> The White Balance filter needs the `cv2.xphoto` module, which the basic package omits.
-> Without it the app still runs — that one checkbox just does nothing, and a warning is printed.
+> **Install `opencv-contrib-python`, not just `opencv-python`.** White Balance needs the
+> `cv2.xphoto` module, which the basic package omits. Without it the app still runs — that one
+> checkbox does nothing, and a warning is printed.
 
 ## Step 3 — Run it
 
@@ -67,20 +64,19 @@ Tested on Windows 11, Python 3, OpenCV 4.13, FFmpeg 8.1.
 
 # 2. How to use it
 
-1. **Choose your video source** at the top left. The box below fills in a default you can edit.
+1. **Choose your video source** at the top left. The box below fills in an editable default.
 2. **Choose an encoder** under *Enc:* — `NVENC` for NVIDIA, `Intel QSV` for Intel graphics.
-   Both move work off the CPU. `Auto` currently means software encoding.
-3. **Tick the filters** you want. These can be changed **while the video is running**.
+   `Auto` currently means software encoding.
+3. **Tick the filters** you want. These can be changed **while the video is running.**
 4. **Set the destination port** — `5600` is QGroundControl's normal video port.
-5. **Click Start Processing Pipeline.** The button turns red. Click again to stop.
+5. **Click Start Processing Pipeline.** The button turns red; click again to stop.
 
 In QGroundControl: *Application Settings → Video* → **UDP h.264 Video Stream**, same port.
 
-![The application running](AppScreen.png)
+![The application running](images/AppScreen.png)
 
-*The app receiving a live UDP H.264 stream on port 5000, resizing to 1080p and forwarding to
-QGroundControl on 5600. Telemetry shows 32.2 FPS in, 1.7 ms of filtering per frame, 6.65 Mbps
-out, no dropped frames. The same latency figure is drawn into the video itself.*
+*Receiving UDP H.264 on port 5000, resizing to 1080p, forwarding to QGroundControl on 5600.
+Telemetry: 32.2 FPS in, 1.7 ms of filtering per frame, 6.65 Mbps out, no dropped frames.*
 
 ## Video sources
 
@@ -91,7 +87,6 @@ out, no dropped frames. The same latency figure is drawn into the video itself.*
 | **Video_File** | Path to an MP4 or MKV | `./UnderwaterVideoPlayback720.mp4` |
 
 > **UDP H264 also uses the next port up.** Entering `5000` means the app occupies `5001` too.
-> Keep it free.
 
 ## Recording
 
@@ -102,8 +97,8 @@ Tick **Enable Local Recording** and pick a mode:
 | **Processed** | Exactly what is being sent out, filters included |
 | **Raw Original** | The untouched camera feed, original size, before any filtering |
 
-Saved beside the app as `ROV_Record_processed_<number>.mp4` or `ROV_Record_raw_<number>.mp4`.
-Recordings always play at the correct speed, even if the computer could not keep up.
+Saved beside the app as `ROV_Record_processed_<n>.mp4` or `ROV_Record_raw_<n>.mp4`, always at the
+correct speed even if the computer could not keep up.
 
 ## Reading the telemetry
 
@@ -138,24 +133,20 @@ When FFmpeg or GStreamer fails, the last lines of its error output are printed, 
 
 # 3. How the system works
 
-You need this much to know where your own code belongs.
+Three jobs — **get data**, **process data**, **send data** — each on its own thread. They never
+call each other; they pass frames through queues. In one loop a slow encoder would stall the
+camera and freeze the window.
 
-The system does three jobs — **get data**, **process data**, **send data** — each on its own
-thread. They never call each other. They pass frames through queues.
+![Three-stage pipeline](images/Pipeline.svg)
 
-![Three-stage pipeline](Pipeline.svg)
-
-**Why threads?** If everything ran in one loop, a slow encoder would stall the camera and
-freeze the window. Splitting the work means each stage runs at its own speed, and the GUI
-stays responsive no matter how heavy your processing is.
-
-**The frame never changes form.** From capture until encoding it is one thing:
-**an OpenCV BGR image — a numpy `uint8` array of shape `(height, width, 3)`.** That is why any
-OpenCV code can be dropped into the middle and it just works.
+**The frame never changes form.** From capture until encoding it is one thing: **an OpenCV BGR
+image — a numpy `uint8` array of shape `(height, width, 3)`.** That is why any OpenCV code can be
+dropped into the middle and it just works.
 
 ## Stage 1 — Getting camera data
 
-`VideoInputThread` turns whatever the camera sends into BGR frames.
+`VideoInputThread` turns whatever the camera sends into BGR frames. It also writes the raw
+recording — the only stage that still has unfiltered video.
 
 | Source | How it is read | Why |
 |---|---|---|
@@ -171,13 +162,11 @@ ROV camera ──RTP/H.264──▶ udp:5000 ──[GStreamer bridge]──▶ u
                                       repacks as MPEG-TS
 ```
 
-This stage also writes the raw recording — it is the only stage that still has unfiltered video.
-
 ## Stage 2 — Processing data
 
-`VideoProcessingThread` is the stage **you will modify.** It takes a frame, normalises it to
-3-channel BGR, runs `apply_filters()`, measures the cost, draws that number onto the frame,
-passes it on, and updates the preview at most 15 times a second.
+`VideoProcessingThread` is the stage **you will modify.** It normalises the frame to 3-channel
+BGR, runs `apply_filters()`, measures the cost, draws that number onto the frame, passes it on,
+and updates the preview at most 15 times a second.
 
 | Filter | What it does | Why underwater |
 |---|---|---|
@@ -185,31 +174,24 @@ passes it on, and updates the preview at most 15 times a second.
 | **White Balance** | Grayworld colour correction | Water absorbs red and yellow — everything looks blue-green |
 | **CLAHE** | Adaptive local contrast | Brings out shapes in murky or dim water |
 
-![What the filters do](FilterComparison.jpg)
-
-*One frame of real footage through the app's own `apply_filters()`. White balance removes the
-blue-green cast the water column imposes; CLAHE lifts local contrast so shapes separate from
-the background.*
+![What the filters do](images/filterComparison.jpg)
 
 ## Stage 3 — Sending data
 
-`VideoOutputThread` pipes frames into FFmpeg, which encodes H.264 and sends it as RTP.
-
-**The output is paced to a steady 30 FPS.** If your processing is slow, the newest frame is
-*repeated* rather than letting the stream fall behind real time.
+`VideoOutputThread` pipes frames into FFmpeg, which encodes H.264 and sends it as RTP. **The
+output is paced to a steady 30 FPS** — if your processing is slow the newest frame is *repeated*
+rather than letting the stream fall behind real time.
 
 ## How the stages connect
 
-**Each queue holds only 3 frames, and throws away the oldest when full.**
+**Each queue holds only 3 frames, and throws away the oldest when full.** That one rule defines
+behaviour under load: when a stage cannot keep up, old frames are discarded rather than piling
+up — right for live pilot video, where a two-second-old frame is worthless.
 
-That one rule defines behaviour under load. When a stage cannot keep up, old frames are
-discarded rather than piling up — for live pilot video that is exactly right, since a
-two-second-old frame is worthless.
+> **Slow processing costs frames, not delay.** You can experiment with expensive algorithms
+> without the video drifting behind reality.
 
-> **The practical consequence for you: slow processing costs frames, not delay.** You can
-> experiment with expensive algorithms without the video drifting behind reality.
-
-![Latency budget](LatencyBudget.svg)
+![Latency budget](images/LatencyBudget.svg)
 
 Measured end to end, camera frame to network packet: **about 128 ms.** QGroundControl adds its
 own buffering on top, usually 100–200 ms, outside this app's control.
@@ -218,12 +200,10 @@ own buffering on top, usually 100–200 ms, outside this app's control.
 
 # 4. Add your own image processing
 
-Everything above exists so that this part is easy.
-
 ## The one function you need
 
-Open [CameraProcessForwarder.py](CameraProcessForwarder.py) and find `apply_filters()` in `VideoProcessingThread`. Write your
-OpenCV code there:
+Find `apply_filters()` in `VideoProcessingThread`
+([CameraProcessForwarder.py](CameraProcessForwarder.py)) and write your OpenCV code there:
 
 ```python
 def apply_filters(self, frame):
@@ -259,7 +239,7 @@ class MyProcessor(cpf.VideoProcessingThread):
 # then use MyProcessor instead of VideoProcessingThread in toggle_pipelines()
 ```
 
-Drop `super().apply_filters(frame)` if you want to replace the built-in filters entirely.
+Drop `super().apply_filters(frame)` to replace the built-in filters entirely.
 
 ## The rules
 
@@ -273,8 +253,8 @@ Drop `super().apply_filters(frame)` if you want to replace the built-in filters 
 
 ## Adding your own on/off switch
 
-Filters are controlled by `self.config`, a plain dictionary shared with the GUI. Three small
-edits give your filter a checkbox:
+Filters are controlled by `self.config`, a plain dictionary shared with the GUI. Three edits give
+your filter a checkbox:
 
 ```python
 # 1. in ROVProcessorApp.__init__, add a default:
@@ -289,8 +269,8 @@ self.chk_mine.stateChanged.connect(self.sync_config)
 self.proc_config["my_filter"] = self.chk_mine.isChecked()
 ```
 
-Then read it with `if self.config["my_filter"]:`. The value updates live, so you can toggle
-your algorithm while the video is running.
+Then read it with `if self.config["my_filter"]:`. The value updates live, so you can toggle your
+algorithm while the video is running.
 
 ## Where to put other kinds of work
 
@@ -302,20 +282,81 @@ your algorithm while the video is running.
 | Support a new camera or protocol | `VideoInputThread.open_source()` |
 | Change encoding or streaming | `VideoOutputThread.start_ffmpeg()` |
 
-## A tip while developing
-
-Use **Video_File** as your source while writing an algorithm. It loops forever, replays
-identical frames every run, and needs no camera or network — so you can iterate quickly, then
-switch to the live source when it works.
+**While developing, use Video_File as your source.** It loops forever, replays identical frames
+every run, and needs no camera or network — then switch to the live source when it works.
 
 ---
 
-# 5. Notes from development
+# 5. Build a standalone executable
 
-Brief. Full detail is in [CHANGELOG.md](CHANGELOG.md); the system guide can be seen in [report.html](report.html).
+For machines with no Python installed. Needs `pip install pyinstaller`.
 
-The app was reviewed and repaired in July 2026. **14 defects were fixed** and end-to-end
-latency was reduced from about **630 ms to 128 ms**.
+```bash
+pyinstaller CameraProcessForwarder.spec
+```
+
+Output is `dist\CameraProcessForwarder\` — about **243 MB**, mostly OpenCV. Run
+`CameraProcessForwarder.exe` inside it. `build\` and `dist\` are gitignored.
+
+- **Ship the whole folder, not just the .exe.** It is a one-directory build.
+- **FFmpeg and GStreamer are not bundled.** The target machine still needs
+  [Step 1](#1-install) of the install, but not Step 2. Both are found at runtime, and GStreamer
+  does not relocate into a bundle cleanly.
+
+## Building without the spec file
+
+The same build as a single command:
+
+```bash
+pyinstaller --noconfirm --console --name CameraProcessForwarder --icon images/AppIcon.ico --add-data "images/AppIcon.ico;images" --hidden-import cv2.xphoto CameraProcessForwarder.py
+```
+
+> **This overwrites `CameraProcessForwarder.spec`.** PyInstaller regenerates the spec from your
+> flags whenever it is given a `.py` file. Pass `--specpath` somewhere else to keep the tracked one.
+
+## Why those flags
+
+| Flag | Reason |
+|---|---|
+| `--hidden-import cv2.xphoto` | Reached via `hasattr(cv2, "xphoto")`, so static analysis misses it. Drop it and the build still succeeds — White Balance just silently does nothing. |
+| `--icon` **and** `--add-data` | `--icon` stamps the .exe for Explorer; `--add-data` ships the file so the Qt window icon works at runtime. Both are needed. |
+| `--console` | Every diagnostic — `[ffmpeg-rtp]`, `[gstreamer]`, filter tracebacks — goes to stdout. A windowed build discards them all. |
+| one-directory (default) | `--onefile` re-extracts OpenCV's DLLs to a temp folder on every launch. Slow, no benefit. |
+
+The spec also lists `excludes`, which are insurance against a future import pulling in something
+heavy — measured, they make no difference to the current build size.
+
+## The app icon
+
+`images/AppIcon.svg` is the artwork; `images/AppIcon.ico` is what Qt and PyInstaller read. Edit the
+SVG, then regenerate:
+
+```bash
+python images/make_icon.py
+```
+
+Draws with OpenCV and NumPy only, so there is no SVG rasteriser to install. Renders at 8× and
+downsamples, which is what keeps the 16 px entry legible.
+
+> Running **from source**, the taskbar icon also depends on
+> `SetCurrentProcessExplicitAppUserModelID` in `__main__`. Without it Windows groups the app under
+> `python.exe` and shows the Python logo regardless of `setWindowIcon`.
+
+## Checking a build
+
+Start it against a video file: source **Video_File**, point it at
+`UnderwaterVideoPlayback720.mp4`, tick **White Balance** and **CLAHE**, start the pipeline. That
+exercises decode, both contrib filters, the encoder and the output path with no camera or network.
+Watch the console for warnings.
+
+---
+
+# 6. Notes from development
+
+Full detail is in [CHANGELOG.md](CHANGELOG.md); the printable guide is [report.html](report.html).
+
+Reviewed and repaired in July 2026: **14 defects fixed**, end-to-end latency cut from about
+**630 ms to 128 ms**.
 
 | Area | Fixed | Examples |
 |---|---|---|
@@ -347,17 +388,18 @@ These all look like sensible improvements. Each was tried and measured.
 
 ---
 
-# 6. Known limitations
+# 7. Known limitations
 
-- **The `Dec:` (decoder) box does nothing.** Decoding runs on the CPU inside FFmpeg. `Enc:`
-  works normally.
+- **The `Dec:` (decoder) box does nothing.** Decoding runs on the CPU inside FFmpeg. `Enc:` works
+  normally.
 - **`Auto` encoder means software encoding.** No hardware detection — choose `NVENC` or
   `Intel QSV` yourself.
-- **Video is only sent to `127.0.0.1`.** Port is configurable, address is not, so
-  QGroundControl must run on the same computer.
-- **The outgoing stream is always 30 FPS.** Change `DEFAULT_OUTPUT_FPS` in [CameraProcessForwarder.py](CameraProcessForwarder.py).
-- **Picture size is fixed when streaming starts.** Toggling *Resize* mid-stream is safe, but
-  the size sent to QGC stays as it was at the start.
+- **Video is only sent to `127.0.0.1`.** Port is configurable, address is not, so QGroundControl
+  must run on the same computer.
+- **The outgoing stream is always 30 FPS.** Change `DEFAULT_OUTPUT_FPS` in
+  [CameraProcessForwarder.py](CameraProcessForwarder.py).
+- **Picture size is fixed when streaming starts.** Toggling *Resize* mid-stream is safe, but the
+  size sent to QGC stays as it was at the start.
 - **One camera at a time.**
 
 ---
@@ -366,10 +408,12 @@ These all look like sensible improvements. Each was tried and measured.
 
 | File | What it is |
 |---|---|
-| [CameraProcessForwarder.py](CameraProcessForwarder.py) | The application — the current version |
+| [CameraProcessForwarder.py](CameraProcessForwarder.py) | The application |
+| [CameraProcessForwarder.spec](CameraProcessForwarder.spec) | PyInstaller build recipe — see [Build](#5-build-a-standalone-executable) |
 | [readme.md](readme.md) | This file |
-| [report.html](report.html) | Printable system guide — install, use, extend |
+| [report.html](report.html) | Printable system guide |
 | [CHANGELOG.md](CHANGELOG.md) | Full change history and planned improvements |
-| `AppScreen.png`, `FilterComparison.jpg` | Figures used in the docs |
-| `Pipeline.svg`, `LatencyBudget.svg` | Diagrams, regenerate with `make_diagrams.py` |
+| `images/AppIcon.svg`, `images/AppIcon.ico` | App icon — regenerate with `images/make_icon.py` |
+| `images/AppScreen.png`, `images/filterComparison.jpg` | Figures used in the docs |
+| `images/Pipeline.svg`, `images/LatencyBudget.svg` | Diagrams, regenerate with `make_diagrams.py` |
 | `old/main.py`, `old/main2.py` | Earlier versions, kept for reference |

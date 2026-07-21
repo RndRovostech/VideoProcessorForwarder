@@ -13,11 +13,36 @@ import numpy as np
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QComboBox, QPushButton, QGroupBox, QCheckBox)
 from PyQt5.QtCore import pyqtSignal, QObject, Qt
-from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtGui import QImage, QPixmap, QIcon
 import shutil
+import ctypes
 
 PREVIEW_FPS = 15.0          # GUI preview is throttled so it can never backlog the event loop
 DEFAULT_OUTPUT_FPS = 30
+
+APP_ICON = os.path.join("images", "AppIcon.ico")
+APP_ID = "Rovostech.VideoProcessorForwarder"   # see the taskbar note in __main__
+
+
+def resource_path(relative):
+    """Absolute path to a bundled asset, working both from source and frozen.
+
+    PyInstaller unpacks its `datas` into a temporary folder and points
+    sys._MEIPASS at it. Running from source there is no such attribute and the
+    assets sit beside this file, so the fallback is this script's own directory.
+    """
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, relative)
+
+
+def load_app_icon():
+    """Return the application icon, or an empty QIcon if the file is missing."""
+    path = resource_path(APP_ICON)
+    if os.path.exists(path):
+        return QIcon(path)
+    # Not fatal -- the app just falls back to the default Qt icon.
+    print("Warning: app icon not found at %s (using the default)." % path)
+    return QIcon()
 
 def find_gstreamer_path():
     """Locate the absolute path to gst-launch-1.0.exe on Windows."""
@@ -1057,7 +1082,17 @@ class ROVProcessorApp(QWidget):
 
 
 if __name__ == "__main__":
+    # Windows groups taskbar buttons by AppUserModelID, and a plain Python script
+    # inherits python.exe's. Without this the taskbar shows the Python icon however
+    # many times setWindowIcon is called -- the title bar updates, the taskbar does
+    # not. Needed when running from source; harmless once frozen.
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+    except Exception:
+        pass    # not Windows, or the call is unavailable -- the icon still works
+
     app = QApplication(sys.argv)
+    app.setWindowIcon(load_app_icon())     # applies to the window and any dialogs
     ex = ROVProcessorApp()
     ex.show()
     sys.exit(app.exec_())

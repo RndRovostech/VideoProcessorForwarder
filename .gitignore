@@ -1,3 +1,8 @@
 __pycache__/
 .vscode/
 UnderwaterVideoPlayback720_half.mp4
+make_diagrams.py
+
+# PyInstaller output -- CameraProcessForwarder.spec is tracked, its products are not
+build/
+dist/

@@ -90,27 +90,64 @@
   .cover-meta .v{ color:#EDEEF4; font-size:11pt; font-weight:600; }
 
   /* ============================ FLOW PAGES ============================ */
-  .section{ page-break-inside:avoid; }
+  /* Three heading levels, separated by the KIND of mark each carries, not by size
+     alone -- size differences alone proved too weak to find a section boundary
+     when scrolling. Section = full-width heavy rule under a large title, preceded
+     by a hairline boundary. Subhead = short vertical bar at the left, no rule.
+     Step = outlined number badge. A horizontal rule therefore always means "new
+     section", and nothing else in the document draws one. */
+  /* Sections FLOW -- they do not each start a new page, and they are not kept off a
+     page break. Both of those were tried and both wasted paper: a section here is
+     several pages of content, so page-break-inside:avoid could never keep one whole
+     and instead shunted the entire block to the next sheet, stranding the Overview
+     alone on a page. Forcing page-break-before on each section then left whatever
+     space remained at the foot of the previous one permanently blank.
 
-  h2.section-title{ font-size:18pt; font-weight:700; color:var(--ink); margin:0 0 1mm; display:flex; align-items:baseline; gap:7px; }
+     Flowing is only readable because a section start is unmistakable on sight -- the
+     hairline boundary, the oversized numeral and the heavy rule below the title. That
+     is what earns the right to begin a section halfway down a page. The guards that
+     matter are local: keep a heading with the block it introduces, and never split a
+     figure, a step card or a panel row. Those are set on the elements themselves. */
+  .section + .section{ margin-top:12mm; padding-top:8mm; border-top:1px solid var(--line); }
+
+  h2.section-title{
+    font-size:20pt; font-weight:700; color:var(--ink);
+    margin:0 0 3mm; padding-bottom:2.5mm; border-bottom:3px solid var(--ink);
+    display:flex; align-items:baseline; gap:9px;
+  }
   /* Section number is set as part of the heading, not as a chip beside it: a larger
      numeral in muted slate, baseline-aligned with the title. Keeping it typographic
      means the only numeric badge in the document is .step-head .sn, so a section
-     number and a step number can never be read as the same kind of thing. */
+     number and a step number can never be read as the same kind of thing. It is set
+     several points above the title so the numeral overshoots the cap height and the
+     eye catches the section start before it reads the words. */
   h2.section-title .num{
-    font-size:18pt; font-weight:700; color:var(--sonar); line-height:1;
+    font-size:27pt; font-weight:700; color:var(--sonar); line-height:1;
     background:none; flex:0 0 auto; font-variant-numeric:tabular-nums;
     letter-spacing:-.01em;
   }
   h2.section-title .num::after{ content:"."; }
-  .section-lead{ color:var(--steel); font-size:10pt; margin:0 0 5mm; max-width:165mm; }
+  .section-lead{ color:var(--steel); font-size:10.5pt; margin:0 0 6mm; max-width:165mm; }
   hr.rule{ border:0; border-top:2px solid var(--sonar); width:100%; margin:0 0 5mm; opacity:.85; }
 
+  /* Subhead: a left bar rather than an underline. An underline here competed with
+     the section rule above it and with the hairline borders of every table below. */
   h3.subhead{
-    font-size:12pt; font-weight:700; color:var(--ink); margin:7mm 0 1mm;
-    padding-bottom:1.5mm; border-bottom:2px solid var(--sonar); display:flex; align-items:center; gap:10px;
+    font-size:12.5pt; font-weight:700; color:var(--sonar-deep); margin:9mm 0 2.5mm;
+    display:flex; align-items:center; gap:8px;
+  }
+  h3.subhead::before{
+    content:""; flex:0 0 auto; width:3px; height:1.05em; border-radius:2px;
+    background:var(--sonar); align-self:center;
   }
   h3.subhead .badge{ margin-left:auto; }
+
+  /* A heading must never be the last thing on a page, and a section title must not be
+     split from its lead paragraph. page-break-after:avoid is what makes flowing
+     sections safe rather than merely compact. */
+  h2.section-title, h3.subhead, .section-lead{ page-break-after:avoid; break-after:avoid; }
+  h2.section-title, h3.subhead{ page-break-inside:avoid; break-inside:avoid; }
+  p, li{ orphans:3; widows:3; }
 
   /* ---- Summary callout ---- */
   .summary{
@@ -224,12 +261,14 @@
   .mx-legend i{ width:11px; height:11px; border-radius:3px; display:inline-block; }
 
   .endnote{ margin-top:8mm; padding-top:4mm; border-top:1px solid var(--line); font-size:8.5pt; color:var(--steel); }
+  /* Available if a section ever must start a fresh sheet. Deliberately unused:
+     sections flow, see the FLOW PAGES note above. */
   .page-break{ page-break-before:always; }
 
 
   /* ---- Figures ---- */
   figure{ margin:0 0 7mm; page-break-inside:avoid; }
-  figure img, figure svg{ width:100%; display:block; }
+  figure img, figure svg{ width:90%; display:block; }
   figure img{ border:1px solid var(--line); border-radius:6px; }
   figcaption{ font-size:8.5pt; color:var(--steel); margin-top:2mm; line-height:1.45; }
   figcaption b{ color:var(--sonar-deep); }
@@ -304,13 +343,13 @@
     <!-- OVERVIEW -->
     <section class="section">
       <h2 class="section-title">Overview</h2>
-      <hr class="rule">
       <div class="summary">
-        <p>This application takes video from a camera, processes, and
-        forwards to <strong>QGroundControl</strong> while optionally recording a local copy. This app have a basic filter image processing to correct <strong>white balance</strong> and/or increase the <strong>contrast/CLAHE</strong>. This application will served as an example program as a starting point for custom image processing.</strong> </p>
-        <p><strong>This guide covers:</strong> installation (section 1), UI explaination
-        (section 2), Process details (section 3), and getting started to extend the app (section 4). Section 5 is a brief note on what was fixed during
-        development and what to avoid.</p>
+        <p>This application takes video from a camera, processes it, and forwards it to
+        <strong>QGroundControl</strong> while optionally recording a local copy. Built-in filters
+        correct <strong>white balance</strong> and lift <strong>contrast (CLAHE)</strong>.</p>
+        <p><strong>This guide covers:</strong> installation (1), the interface (2), how the
+        pipeline works (3), and how to add your own image processing (4) — which is what the
+        application exists to make easy.</p>
       </div>
     </section>
 
@@ -374,13 +413,13 @@
     </section>
 
     <!-- 2. USING THE APPLICATION -->
-    <section class="section page-break">
+    <section class="section">
       <h2 class="section-title"><span class="num">2</span>Using the Application</h2>
       <p class="section-lead">Choose a source, choose an encoder, tick the filters you want, set the destination port, and start.</p>
 
     <figure>
       <div class="shot">
-        <img src="AppScreen.png"
+        <img src="images/AppScreen.png"
              alt="The application running, receiving a live UDP H.264 stream">
       <span class="pin" style="left:34.0%; top:5.9%">1</span>
       <span class="pin" style="left:34.0%; top:21.3%">2</span>
@@ -401,11 +440,10 @@
       <span><i>7</i>Live diagnostic telemetry</span>
       <span><i>8</i>Latency burned into the video itself</span>
       </div>
-      <figcaption><b>The application running.</b> A live UDP H.264 feed on port 5000 is being
-      resized to 1080p and forwarded to QGroundControl on port 5600. The telemetry panel reports
-      32.2 FPS in, 1.7 ms of filtering per frame, 6.65 Mbps out and no dropped frames.<br>
-      <b>Encoding and Decoding</b> is recommended using the Nvidia (NVENC & NVDEC).
-      </figcaption>
+      <figcaption><b>The application running.</b> A live UDP H.264 feed on port 5000, resized to
+      1080p and forwarded to QGroundControl on port 5600 — 32.2 FPS in, 1.7 ms of filtering per
+      frame, 6.65 Mbps out, no dropped frames. <b>NVENC / NVDEC is the recommended encoder and
+      decoder</b> where an Nvidia card is available.</figcaption>
 
     </figure>
 
@@ -432,8 +470,11 @@
       </div>
 
       <h3 class="subhead">ROV Settings</h3>
-      <p>Default camera destination/stream endpoint in ROV setting is usually 192.168.2.1:5600, change it to 5000 (or other available port). It is possible to send the raw camera feed to multiple endpoint (eg. same IP, different port) to feed the qgroundcontrol with the raw data instead of the processed data.</p>
-      <img src="ROVVideoStreamSetting.png" alt="ROV Video Stream Settings">
+      <p>The ROV's stream endpoint usually defaults to <code>192.168.2.1:5600</code> — change it
+      to <code>5000</code>, or any free port. The feed can also be sent to several endpoints at
+      once (same IP, different ports), which lets QGroundControl receive the raw camera feed
+      alongside the processed one.</p>
+      <img src="images/ROVVideoStreamSetting.png" alt="ROV Video Stream Settings">
       
       <h3 class="subhead">Recording</h3>
       <table class="bom">
@@ -467,8 +508,9 @@
         </tbody>
       </table>
 
-      <p><b>Watch Processing Overhead while developing a filter.</b> This will shows the delay due to processing. 
-        If the average value is more than 80ms, the program should be modified to feed the unprocessed data to the QGroundControl for pilot view</p>
+      <p><b>Watch Processing Overhead while developing a filter</b> — it is the delay your own
+      code adds. If it averages more than 80 ms, feed the unprocessed video to QGroundControl for
+      the pilot view instead.</p>
 
       <h3 class="subhead">Troubleshooting</h3>
       <table class="bom">
@@ -492,7 +534,7 @@
     </section>
 
     <!-- 3. HOW THE SYSTEM WORKS -->
-    <section class="section page-break">
+    <section class="section">
       <h2 class="section-title"><span class="num">3</span>How the System Works</h2>
       <p class="section-lead">There are 3 steps to process the camera feed: Retrieve, process and send. Each process is running parallel to the others.</p>
 
@@ -543,172 +585,18 @@
 </svg>
       </figure>
 
-      <table class="bom">
-        <!-- <caption class="fx">Each stage is a Python thread. Queues hold 3 frames and discard the oldest when full.</caption> -->
-        <thead>
-          <tr>
-            <th style="width:30mm">Stage</th>
-            <th style="width:44mm">Class</th>
-            <th>Responsibility</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>1. Retrieve</td><td><code>VideoInputThread</code></td><td>Get the camera data in UDP H.264, RTSP or a file into BGR frames.</td></tr>
-          <tr><td>2. Process</td><td><code>VideoProcessingThread</code></td><td>Run the image filters, measure the processing time, and feeding the preview.</td></tr>
-          <tr><td>3. Send</td><td><code>VideoOutputThread</code></td><td>Encode and send processed camera videos using FFmpeg, transmit as RTP.</td></tr>
-        </tbody>
-      </table>
-
-      <!-- <div class="target-head">
-        <div>
-          <span class="t-eyebrow">Stage 1</span>
-          <h2>Getting camera data</h2>
-        </div>
-        <span class="point-tag">INGEST</span>
-      </div>
-      <div class="info-grid">
-        <div class="panel">
-          <h4>◎ Video file</h4>
-          <ul>
-            <li>Read with OpenCV</li>
-            <li>Needs seeking, so it can loop</li>
-            <li>Latency irrelevant</li>
-          </ul>
-        </div>
-        <div class="panel">
-          <h4>◷ RTSP camera</h4>
-          <ul>
-            <li>Read by FFmpeg directly</li>
-            <li>Low-latency flags applied</li>
-          </ul>
-        </div>
-        <div class="panel">
-          <h4>▶ UDP H.264</h4>
-          <ul>
-            <li>GStreamer unpacks RTP</li>
-            <li>Republished locally as MPEG-TS</li>
-            <li>FFmpeg decodes to BGR</li>
-          </ul>
-        </div>
-      </div> -->
-
-      <!-- <p>For the usual ROV case the data takes two hops before it becomes pixels:</p>
-      <table class="bom">
-        <thead>
-          <tr>
-            <th style="width:46mm">Step</th>
-            <th style="width:32mm">Carried as</th>
-            <th>Performed by</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>ROV camera → <code>udp:5000</code></td><td>RTP / H.264</td><td>The vehicle</td></tr>
-          <tr><td><code>udp:5000</code> → <code>udp:5001</code></td><td>MPEG-TS</td><td>GStreamer bridge — unpacks RTP, repacks as a stream FFmpeg reads reliably</td></tr>
-          <tr><td><code>udp:5001</code> → BGR frames</td><td>Raw pixels</td><td><code>FFmpegFrameReader</code> — decodes H.264</td></tr>
-        </tbody>
-      </table> -->
-
-      <!-- <div class="target-head">
-        <div>
-          <span class="t-eyebrow">Stage 2</span>
-          <h2>Processing data</h2>
-        </div>
-        <span class="point-tag">THE EXTENSION POINT</span>
-      </div>
-      <div class="info-grid">
-        <div class="panel">
-          <h4>◎ Resize</h4>
-          <ul>
-            <li>Scales to 1920×1080</li>
-            <li>Standardises the output</li>
-          </ul>
-        </div>
-        <div class="panel">
-          <h4>◷ White Balance</h4>
-          <ul>
-            <li>Grayworld correction</li>
-            <li>Restores red and yellow absorbed by the water column</li>
-          </ul>
-        </div>
-        <div class="panel">
-          <h4>▶ CLAHE</h4>
-          <ul>
-            <li>Adaptive local contrast</li>
-            <li>Reveals shapes in murky or dim water</li>
-          </ul>
-        </div>
-      </div> -->
-
-      <p>The loop is deliberately simple: take a frame, normalise it to 3-channel BGR, run
-      <code>apply_filters()</code>, time it, draw the result onto the frame, pass it on, and
-      update the preview at most 15 times a second.</p>
+      <p>The processing stage is deliberately simple: take a frame, normalise it to 3-channel
+      BGR, run <code>apply_filters()</code>, time it, draw the result onto the frame, pass it on,
+      and update the preview at most 15 times a second. <b>That one function is where custom
+      image processing goes</b> — see section 4.</p>
 
       <figure>
-        <img src="FilterComparison.jpg" alt="The same underwater frame with each filter applied">
+        <img src="images/filterComparison.jpg" alt="The same underwater frame with each filter applied">
         <figcaption>White balance restores the sand and fish to natural
         colour; CLAHE lifts local contrast, separate object from the background. Both can be combined.</figcaption>
       </figure>
 
-
-      <!-- <div class="target-head">
-        <div>
-          <span class="t-eyebrow">Stage 3</span>
-          <h2>Sending data</h2>
-        </div>
-        <span class="point-tag">OUTPUT</span>
-      </div>
-      <div class="info-grid">
-        <div class="panel">
-          <h4>◎ Encode</h4>
-          <ul>
-            <li>Frames piped into FFmpeg</li>
-            <li>H.264, <code>yuv420p</code></li>
-            <li>Keyframe every second</li>
-          </ul>
-        </div>
-        <div class="panel">
-          <h4>◷ Transmit</h4>
-          <ul>
-            <li>RTP to the configured port</li>
-            <li>Read by QGroundControl</li>
-          </ul>
-        </div>
-        <div class="panel">
-          <h4>▶ Pace</h4>
-          <ul>
-            <li>Held to a true 30 FPS</li>
-            <li>Newest frame repeated if starved</li>
-            <li>Keeps the stream clock honest</li>
-          </ul>
-        </div>
-      </div>
-
-      <h3 class="subhead">The queues — why the system behaves as it does</h3>
-      <p>The stages never call each other. They pass frames through queues that hold
-      <b>three frames and discard the oldest when full</b>. That single rule defines the
-      system's behaviour under load.</p>
-
-      <table class="bom">
-        <thead>
-          <tr>
-            <th style="width:56mm">Condition</th>
-            <th>What happens</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>All stages keeping up</td><td>Frames flow straight through; queues stay near empty</td></tr>
-          <tr><td>Processing too slow</td><td>Oldest frames discarded at the input queue — the pilot still sees current video</td></tr>
-          <tr><td>Encoder or network too slow</td><td>Oldest frames discarded at the output queue; the pacer repeats what it has</td></tr>
-          <tr><td>Source slower than 30 FPS</td><td>Pacer repeats the newest frame so the stream clock stays locked to real time</td></tr>
-        </tbody>
-      </table>
-
-      <div class="note">
-        <span class="ico">⚠</span>
-        <div><b>Slow processing costs frames, not delay.</b> For live pilot video this is the
-        correct trade — a two-second-old frame is worthless. It is also the safety net for your
-        own algorithm: an expensive filter degrades smoothness, never real-time behaviour.</div>
-      </div> -->
+      
 
       <figure>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 210" font-family="Calibri, 'Segoe UI', Arial, sans-serif" role="img" aria-label="Latency budget bar chart">
@@ -746,15 +634,10 @@
         flip test. QGroundControl adds its own buffering on top, typically 100–200 ms, which is
         outside this application's control.</figcaption>
       </figure>
-
-      <p>Measured end to end, camera frame to network packet: <b>about 128 ms</b>, of which
-      ~109 ms is the unavoidable cost of receiving and decoding incoming compressed video.
-      QGroundControl adds its own buffering on top, usually 100–200 ms, outside this
-      application's control.</p>
     </section>
 
     <!-- 4. ADDING YOUR OWN IMAGE PROCESSING -->
-    <section class="section page-break">
+    <section class="section">
       <h2 class="section-title"><span class="num">4</span>Custom Image Processing</h2>
       <p class="section-lead">Custom image processing is implemented in the VideoProcessingThread class, apply_filter function.</p>
 
@@ -769,6 +652,7 @@
           <div class="step-body">
             <p>Open <code>CameraProcessForwarder.py</code>, find <code>apply_filters()</code>, and add your stages
             where the comment marks the spot. Simplest approach for a private build.</p>
+            <img src="images/applyFilterExample.png" alt="Example of apply_filters() with a custom filter">
           </div>
         </div>
         <div class="step">
@@ -776,48 +660,10 @@
           <div class="step-body">
             <p>Subclass <code>VideoProcessingThread</code> and override
             <code>apply_filters()</code>. Inherit using <code>super().apply_filters(frame)</code> and modify as needed.</p>
+            <img src="images/createSubClassCustomFilter.png" alt="Example of subclassing VideoProcessingThread and overriding apply_filters()">
             </div>
         </div>
       </div>
-
-      <!-- <h3 class="subhead">The contract — five rules</h3>
-      <table class="risk">
-        <caption class="fx">Breaking rules 1 or 4 causes failures that are not obvious from the application window.</caption>
-        <thead>
-          <tr>
-            <th style="width:14mm" class="c">Rule</th>
-            <th style="width:52mm">Requirement</th>
-            <th>Reason</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td class="c"><span class="lvl hi">1</span></td>
-            <td>Return BGR <code>uint8</code>, 3 channels</td>
-            <td>Convert back before returning if you work in greyscale, HSV or LAB — otherwise the encoder rejects the frame.</td>
-          </tr>
-          <tr>
-            <td class="c"><span class="lvl med">2</span></td>
-            <td>Keep the frame size consistent</td>
-            <td>Stream geometry locks to the first frame; later changes are rescaled and waste work.</td>
-          </tr>
-          <tr>
-            <td class="c"><span class="lvl med">3</span></td>
-            <td>Stay under 33 ms per frame</td>
-            <td>Watch <i>Processing Overhead</i>. Slower is not fatal — frames are dropped, not queued — but the video becomes choppy.</td>
-          </tr>
-          <tr>
-            <td class="c"><span class="lvl hi">4</span></td>
-            <td>Never touch Qt widgets from this method</td>
-            <td>It runs on a worker thread. Use <code>self.stats_callback(...)</code> to send values to the window safely.</td>
-          </tr>
-          <tr>
-            <td class="c"><span class="lvl low">5</span></td>
-            <td>Build expensive objects once in <code>__init__</code></td>
-            <td>Not per frame. See how <code>self.clahe</code> is constructed.</td>
-          </tr>
-        </tbody>
-      </table> -->
 
       <h3 class="subhead">Show the Custom Filter</h3>
       <p>The filters can be activated using checkbox and activated by config/filter name. The name of the filter can be set using the <code>proc_config</code> in the <code>ROVProcessorApp</code>.</p>
@@ -831,142 +677,18 @@
           </tr>
         </thead>
         <tbody>
-          <tr><td class="c">1</td><td><code>ROVProcessorApp.__init__</code></td><td>A default in <code>proc_config</code>, e.g. <code>"my_filter": False</code></td><td><img src="Proc_config.png" alt="" width="200"></td></tr>
-          <tr><td class="c">2</td><td><code>initUI</code></td><td>The <code>QCheckBox</code>, added to the layout and connected to event<code>sync_config</code></td><td><img src="initUICheckbox.png" alt="" width="200"></td></tr>
-          <tr><td class="c">3</td><td><code>sync_config</code></td><td>Copy the checkbox state into <code>proc_config</code></td><td><img src="sync_config.png" alt="" width="200"></td></tr>
+          <tr><td class="c">1</td><td><code>ROVProcessorApp.__init__</code></td><td>A default in <code>proc_config</code>, e.g. <code>"my_filter": False</code></td><td><img src="images/Proc_config.png" alt="" width="200"></td></tr>
+          <tr><td class="c">2</td><td><code>initUI</code></td><td>The <code>QCheckBox</code>, added to the layout and connected to event<code>sync_config</code></td><td><img src="images/initUICheckbox.png" alt="" width="200"></td></tr>
+          <tr><td class="c">3</td><td><code>sync_config</code></td><td>Copy the checkbox state into <code>proc_config</code></td><td><img src="images/sync_config.png" alt="" width="200"></td></tr>
         </tbody>
       </table>
       <p>Then read it in your filter with <code>if self.config["my_filter"]:</code>. The value
       updates live, so the algorithm can be toggled while video is running.</p>
-
-      <!-- <h3 class="subhead">Where other kinds of change belong</h3>
-      <table class="bom">
-        <thead>
-          <tr>
-            <th style="width:66mm">Goal</th>
-            <th>Location</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>Change how the picture looks</td><td><code>apply_filters()</code></td></tr>
-          <tr><td>Detect something and report a number</td><td><code>apply_filters()</code>, then <code>self.stats_callback(...)</code></td></tr>
-          <tr><td>Draw boxes, text or masks on the video</td><td><code>apply_filters()</code> — it is a normal OpenCV image</td></tr>
-          <tr><td>Support a new camera or protocol</td><td><code>VideoInputThread.open_source()</code></td></tr>
-          <tr><td>Change encoding or streaming</td><td><code>VideoOutputThread.start_ffmpeg()</code></td></tr>
-        </tbody>
-      </table>
-
-      <div class="note">
-        <span class="ico">⚠</span>
-        <div><b>Develop against a video file.</b> The <i>Video_File</i> source loops forever and
-        replays identical frames every run, so an algorithm can be iterated quickly with no
-        camera and no network. Switch to the live source once it works.</div>
-      </div>
-    </section> -->
+      <img src="images/UICodeChange.png" alt="Checkbox to enable the custom filter">
 
     <!-- 5. NOTES FROM DEVELOPMENT -->
-    <!-- <section class="section page-break">
-      <h2 class="section-title"><span class="num">5</span>Notes from Development</h2>
-      <p class="section-lead">A brief summary of what was repaired and what to avoid. Full detail is kept separately in CHANGELOG.md.</p>
 
-      <h3 class="subhead">What was fixed</h3>
-      <p>The application was reviewed and repaired in July 2026. Fourteen defects were found
-      and corrected, and end-to-end latency was reduced from about <b>630 ms to 128 ms</b>.</p>
-
-      <table class="bom">
-        <caption class="fx">Grouped by type. Every fix was verified by measurement rather than inspection.</caption>
-        <thead>
-          <tr>
-            <th style="width:44mm">Area</th>
-            <th style="width:14mm" class="c">Count</th>
-            <th>Examples</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>Stream-breaking faults</td><td class="c">5</td><td>An unread error pipe would freeze the encoder permanently; the output was encoded in a colour format QGroundControl cannot play</td></tr>
-          <tr><td>Silent data loss</td><td class="c">3</td><td>"Raw Original" recording produced 0-byte files; recordings were truncated and played at the wrong speed</td></tr>
-          <tr><td>Incorrect telemetry</td><td class="c">3</td><td>Network bitrate was overstated ~70×; the dropped-frame counter always read zero</td></tr>
-          <tr><td>Latency</td><td class="c">3</td><td>Delay grew steadily during a dive; a hidden half-second of buffering in the video reader</td></tr>
-        </tbody>
-      </table>
-
-      <div class="note">
-        <span class="ico">⚠</span>
-        <div><b>If the video ever looks late again</b>, the distinction that matters is this: a
-        <b>constant</b> delay is QGroundControl's own buffer and is normal. A delay that
-        <b>grows the longer you fly</b> is a fault in the output pacing and should be
-        investigated.</div>
-      </div>
-
-      <h3 class="subhead">What to do</h3>
-      <div class="info-grid" style="border-radius:10px; border-top:1px solid var(--line);">
-        <div class="panel">
-          <h4>◎ Test with a file first</h4>
-          <ul>
-            <li>Loops forever, fully repeatable</li>
-            <li>No camera or network needed</li>
-            <li>Switch to live once it works</li>
-          </ul>
-        </div>
-        <div class="panel">
-          <h4>◷ Watch the overhead</h4>
-          <ul>
-            <li>Keep filters under 33 ms</li>
-            <li>Check the console for warnings</li>
-            <li>Use a hardware encoder if tight</li>
-          </ul>
-        </div>
-        <div class="panel">
-          <h4>▶ Measure, do not assume</h4>
-          <ul>
-            <li>Time changes before keeping them</li>
-            <li>Several "obvious" fixes made things worse</li>
-          </ul>
-        </div>
-      </div>
-
-      <h3 class="subhead">What to avoid</h3>
-      <p>These all look like sensible improvements and are not. Each was tried and measured
-      during development.</p>
-
-      <table class="risk">
-        <thead>
-          <tr>
-            <th style="width:56mm">Do not</th>
-            <th style="width:20mm" class="c">Verdict</th>
-            <th>Why</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Use <code>cv2.VideoCapture</code> for live network video</td>
-            <td class="c"><span class="lvl hi">Avoid</span></td>
-            <td>It buffers ~0.6 s and ignores every low-latency option, including its own documented environment variable. Drive FFmpeg directly instead.</td>
-          </tr>
-          <tr>
-            <td>Apply wallclock timestamps to the outgoing stream</td>
-            <td class="c"><span class="lvl hi">Avoid</span></td>
-            <td>Measured <b>838 ms worse</b>. They are correct for recordings, which is a different problem.</td>
-          </tr>
-          <tr>
-            <td>Leave a subprocess error pipe unread</td>
-            <td class="c"><span class="lvl hi">Avoid</span></td>
-            <td>FFmpeg fills the 64 KB buffer within a minute and then blocks forever. Always drain it.</td>
-          </tr>
-          <tr>
-            <td>Change the frame size mid-stream</td>
-            <td class="c"><span class="lvl med">Careful</span></td>
-            <td>The encoder is fed headerless raw video; geometry is locked at the first frame for this reason.</td>
-          </tr>
-          <tr>
-            <td>Assume the source frame rate matches the output</td>
-            <td class="c"><span class="lvl med">Careful</span></td>
-            <td>If they differ and pacing is removed, the stream clock drifts and delay grows without limit.</td>
-          </tr>
-        </tbody>
-      </table> -->
-
-      <p class="endnote">Rovostech · Video Processor Forwarder · System Guide · 20 Jul 2026 · Full change history in CHANGELOG.md</p>
+      <p class="endnote">Rovostech · Video Processor Forwarder · System Guide · 20 Jul 2026</p>
     </section>
 
   </div><!-- /flow -->

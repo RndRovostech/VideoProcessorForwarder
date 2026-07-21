@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Video Processor Forwarder — application icon (master artwork).
+
+  A camera lens with a forward chevron: "video, forwarded". Palette is the
+  report.html design system — graphite #14161F ground, pale slate #9AA0C4 ring,
+  cyan #2BA6DE for the pupil and chevron.
+
+  Geometry is tuned for 16 px, not for this 256 px view. The ring stroke, pupil
+  radius and chevron weight are all heavier than they would be if the icon were
+  only ever seen large; below 24 px anything thinner merges into a smudge. The
+  1 px gap between ring and chevron is deliberate — they touch and blur into a
+  single shape without it.
+
+  Regenerate the .ico from this file with images/make_icon.py.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <rect width="256" height="256" rx="56" fill="#14161F"/>
+  <circle cx="99" cy="128" r="52" fill="none" stroke="#9AA0C4" stroke-width="17"/>
+  <circle cx="99" cy="128" r="22" fill="#2BA6DE"/>
+  <path d="M171 92 L207 128 L171 164" fill="none" stroke="#2BA6DE" stroke-width="21"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
