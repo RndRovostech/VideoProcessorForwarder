@@ -9,6 +9,9 @@ streaming are already built and measured; you write one function.
 
 **Run it with:** `python CameraProcessForwarder.py`
 
+To access the report, access the link below
+📖 **[View the Documentation & Guide](https://rndrovostech.github.io/VideoProcessorForwarder/report.html)**
+
 ---
 
 ## Contents
