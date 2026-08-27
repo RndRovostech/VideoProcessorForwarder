@@ -100,7 +100,7 @@ Tick **Enable Local Recording** and pick a mode:
 | **Processed** | Exactly what is being sent out, filters included |
 | **Raw Original** | The untouched camera feed, original size, before any filtering |
 
-Saved beside the app as `ROV_Record_processed_<n>.mp4` or `ROV_Record_raw_<n>.mp4`, always at the
+Saved in the `videos/` folder beside the app as `ROV_Record_processed_<n>.mp4` or `ROV_Record_raw_<n>.mp4`, always at the
 correct speed even if the computer could not keep up.
 
 ## Real-Time Snapshot Capture
@@ -116,6 +116,7 @@ Click **📸 Capture Snapshot** (or press `Space`) while the stream is running t
 | Readout | What it tells you | Healthy |
 |---|---|---|
 | **Input Stream Rate** | Frames arriving from the camera | Steady, matching your camera |
+| **Processed Rate** | Frames successfully filtered per second | Matching input (up to 30 FPS) |
 | **Processing Overhead** | Time spent filtering one frame | Under 33 ms |
 | **Network Bitrate** | Actual data crossing the tether | Depends on your link |
 | **Dropped Frames** | Frames discarded because a stage fell behind | 0, or rising slowly |

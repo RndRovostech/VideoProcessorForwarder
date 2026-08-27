@@ -150,34 +150,34 @@ def report_child_failure(label, process, tail):
         print(f"[{label}] {line}")
 
 
-def start_recorder(width, height, encoder, suffix):
-    """Spawn an FFmpeg process that archives raw BGR frames to a local MP4.
-
-    Deliberately no input -r: frames are stamped by arrival time (wallclock) and muxed
-    VFR, so an archive is always real-time accurate even when the pipeline runs below
-    the nominal frame rate. Declaring a fixed rate instead yields a sped-up recording.
-    """
+def start_recorder(width, height, encoder, suffix, fps=DEFAULT_OUTPUT_FPS):
+    """Spawn an FFmpeg process that archives raw BGR frames to a local MP4."""
     enc_codec, enc_opts = resolve_encoder(encoder)
-    rec_file = os.path.join(get_app_dir(), f"ROV_Record_{suffix}_{int(time.time())}.mp4")
+    video_dir = os.path.join(get_app_dir(), "videos")
+    os.makedirs(video_dir, exist_ok=True)
+    rec_file = os.path.join(video_dir, f"ROV_Record_{suffix}_{int(time.time())}.mp4")
     rec_cmd = [
         "ffmpeg", "-y",
         "-f", "rawvideo", "-vcodec", "rawvideo", "-pix_fmt", "bgr24",
         "-s", f"{width}x{height}",
-        "-use_wallclock_as_timestamps", "1",
+        "-r", str(fps),
         "-i", "-",
         "-c:v", enc_codec, *enc_opts,
-        "-fps_mode", "vfr",
         "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
         rec_file
     ]
     try:
-        process = subprocess.Popen(rec_cmd, stdin=subprocess.PIPE,
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        print(f"Recording {suffix} stream to {rec_file} ({width}x{height})")
-        return process, drain_pipe(process.stderr)
+        process = subprocess.Popen(
+            rec_cmd, stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+        )
+        print(f"Recording {suffix} stream to {rec_file} ({width}x{height} @ {fps}fps)")
+        return process, drain_pipe(process.stderr), rec_file
     except Exception as e:
         print(f"Failed to start FFmpeg record ({suffix}): {e}")
-        return None, deque()
+        return None, deque(), None
 
 
 def close_process(process, tail=None, label=None, grace=5.0):
@@ -501,16 +501,26 @@ class VideoInputThread(threading.Thread):
                 if sleep_needed > 0:
                     time.sleep(sleep_needed)
 
+    def set_recording(self, enabled):
+        self.record_raw = enabled
+        if not enabled and self.record_process:
+            close_process(self.record_process, self.record_tail, "ffmpeg-raw")
+            self.record_process = None
+            self.stats_callback("rec_status", "Recording: Inactive")
+
     def write_raw(self, frame):
         """Archive the untouched source frame ("Raw Original" recording mode)."""
         if self.record_process is None:
             h, w = frame.shape[:2]
-            self.record_process, self.record_tail = start_recorder(
+            self.record_process, self.record_tail, rec_file = start_recorder(
                 w, h, self.encoder, "raw")
             if self.record_process is None:
                 self.record_raw = False
+                self.stats_callback("rec_status", "Recording: Failed to start")
                 return
             self.raw_size = (w, h)
+            if rec_file:
+                self.stats_callback("rec_status", f"Recording: {os.path.basename(rec_file)}")
         try:
             frame = np.ascontiguousarray(fit_to(frame, self.raw_size))
             self.record_process.stdin.write(frame.data)
@@ -519,6 +529,7 @@ class VideoInputThread(threading.Thread):
             report_child_failure("ffmpeg-raw", self.record_process, self.record_tail)
             self.record_process = None
             self.record_raw = False
+            self.stats_callback("rec_status", "Recording: Error")
 
     def cleanup(self, cap=None):
         if cap is not None:
@@ -528,6 +539,7 @@ class VideoInputThread(threading.Thread):
             self.reader = None
         close_process(self.record_process, self.record_tail, "ffmpeg-raw")
         self.record_process = None
+        self.stats_callback("rec_status", "Recording: Inactive")
         if self.gst_process:
             # gst-launch never exits on its own -- go straight to terminate
             close_process(self.gst_process, grace=0)
@@ -543,6 +555,7 @@ class VideoProcessingThread(threading.Thread):
         self.stats_callback = stats_callback
         self.preview_signal = preview_signal
         self.running = True
+        self.snapshot_request = None
 
         # xphoto lives in opencv-contrib-python; degrade gracefully instead of crashing
         # the GUI thread when only the base opencv-python wheel is installed.
@@ -554,6 +567,10 @@ class VideoProcessingThread(threading.Thread):
             print("Warning: cv2.xphoto missing (install opencv-contrib-python). "
                   "White Balance will be skipped.")
         self.clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+
+    def request_snapshot(self, target_dir, callback=None):
+        """Schedule an instant snapshot capture on the very next processed frame with 0ms latency."""
+        self.snapshot_request = (target_dir, callback)
 
     def apply_filters(self, frame):
         """### ADD YOUR OWN IMAGE PROCESSING HERE ###
@@ -580,18 +597,18 @@ class VideoProcessingThread(threading.Thread):
              self.stats_callback(...) to report numbers to the GUI instead.
           5. Build expensive objects once in __init__, not per frame (see self.clahe).
         """
-        if self.config["resize"]:
-            frame = cv2.resize(frame, (1920, 1080), interpolation=cv2.INTER_LINEAR)
-
+        # 1. Apply enhancements on native camera resolution (2.25x faster than 1080p)
         if self.config["white_balance"] and self.wb is not None:
             frame = self.wb.balanceWhite(frame)
 
         if self.config["clahe"]:
             lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
-            l, a, b = cv2.split(lab)
-            cl = self.clahe.apply(l)
-            limg = cv2.merge((cl, a, b))
-            frame = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+            lab[:, :, 0] = self.clahe.apply(lab[:, :, 0])  # in-place L channel, no split/merge overhead
+            frame = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+        # 2. Resize to standard 1080p output at the end
+        if self.config["resize"]:
+            frame = cv2.resize(frame, (1920, 1080), interpolation=cv2.INTER_LINEAR)
 
         # --- your own stages go here ---
 
@@ -600,6 +617,8 @@ class VideoProcessingThread(threading.Thread):
     def run(self):
         last_dropped = -1
         last_preview = 0.0
+        last_proc_stats = time.time()
+        proc_frame_count = 0
         preview_interval = 1.0 / PREVIEW_FPS
         while self.running:
             frame = self.input_queue.get(timeout=0.1)
@@ -617,8 +636,40 @@ class VideoProcessingThread(threading.Thread):
             proc_time_ms = (time.perf_counter() - start_time) * 1000.0
             self.stats_callback("proc_time", f"{proc_time_ms:.1f} ms")
 
-            cv2.putText(frame, f"Latency: {proc_time_ms:.1f}ms", (30, 60),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+            proc_frame_count += 1
+            now_time = time.time()
+            if now_time - last_proc_stats >= 1.0:
+                self.stats_callback("proc_fps", f"{proc_frame_count / (now_time - last_proc_stats):.1f} FPS")
+                proc_frame_count = 0
+                last_proc_stats = now_time
+
+            # Capture snapshot immediately on this exact live frame (0ms latency, clean frame)
+            if self.snapshot_request is not None:
+                target_dir, cb = self.snapshot_request
+                self.snapshot_request = None
+                snap_frame = frame.copy()
+
+                def _save_snap(img, sdir, callback):
+                    try:
+                        os.makedirs(sdir, exist_ok=True)
+                        ts = time.strftime("%Y%m%d_%H%M%S")
+                        ms = int((time.time() % 1) * 1000)
+                        fname = f"ROV_Capture_{ts}_{ms:03d}.jpg"
+                        fpath = os.path.join(sdir, fname)
+                        if cv2.imwrite(fpath, img, [cv2.IMWRITE_JPEG_QUALITY, 95]):
+                            print(f"Snapshot saved: {fpath}")
+                            if callback:
+                                callback("capture_status", fname)
+                        else:
+                            print(f"Failed to write snapshot: {fpath}")
+                            if callback:
+                                callback("capture_status", "Save failed")
+                    except Exception as ex:
+                        print(f"Error saving snapshot: {ex}")
+                        if callback:
+                            callback("capture_status", "Error saving")
+
+                threading.Thread(target=_save_snap, args=(snap_frame, target_dir, cb), daemon=True).start()
 
             # Push to transmitter, then report end-to-end loss across both stages
             self.output_queue.put(frame)
@@ -727,8 +778,23 @@ class VideoOutputThread(threading.Thread):
         if not self.start_ffmpeg(port, enc_codec, enc_opts, w, h):
             return False
         if self.record_enabled and self.record_mode == "Processed":
-            self.record_process, self.record_tail = start_recorder(w, h, self.encoder, "processed")
+            self.record_process, self.record_tail, rec_file = start_recorder(w, h, self.encoder, "processed")
+            if rec_file:
+                self.stats_callback("rec_status", f"Recording: {os.path.basename(rec_file)}")
         return True
+
+    def set_recording(self, enabled, mode="Processed"):
+        self.record_enabled = enabled
+        self.record_mode = mode
+        if not enabled and self.record_process:
+            close_process(self.record_process, self.record_tail, "ffmpeg-rec")
+            self.record_process = None
+            self.stats_callback("rec_status", "Recording: Inactive")
+        elif enabled and self.record_mode == "Processed" and self.record_process is None and self.frame_size is not None:
+            w, h = self.frame_size
+            self.record_process, self.record_tail, rec_file = start_recorder(w, h, self.encoder, "processed")
+            if rec_file:
+                self.stats_callback("rec_status", f"Recording: {os.path.basename(rec_file)}")
 
     def send(self, frame):
         """Write one frame to the stream and, if active, the recorder. False if the
@@ -746,6 +812,7 @@ class VideoOutputThread(threading.Thread):
                 print("Recorder pipe closed; stopping local archive.")
                 report_child_failure("ffmpeg-rec", self.record_process, self.record_tail)
                 self.record_process = None
+                self.stats_callback("rec_status", "Recording: Error")
         return True
 
     def report_source_rate(self, src_fps):
@@ -821,6 +888,7 @@ class VideoOutputThread(threading.Thread):
         self.ffmpeg_process = None
         close_process(self.record_process, self.record_tail, "ffmpeg-rec")
         self.record_process = None
+        self.stats_callback("rec_status", "Recording: Inactive")
 
 # --- Main Application Logic & GUI ---
 class ROVProcessorApp(QWidget):
@@ -838,6 +906,8 @@ class ROVProcessorApp(QWidget):
         self.processing_active = False
         self.latest_frame = None
         self.capture_dir = os.path.join(get_app_dir(), "captures")
+        # self.record_dir = os.path.join(get_app_dir(), "videos")
+
 
         self.proc_config = {
             "resize": True,
@@ -938,14 +1008,18 @@ class ROVProcessorApp(QWidget):
         stats_group = QGroupBox("Diagnostic Telemetry")
         stats_layout = QVBoxLayout()
         self.lbl_in_fps = QLabel("Input Stream Rate: 0 FPS")
+        self.lbl_proc_fps = QLabel("Processed Rate: 0 FPS")
         self.lbl_proc_time = QLabel("Processing Overhead: 0.0 ms")
         self.lbl_bitrate = QLabel("Network Bitrate: 0.00 Mbps")
         self.lbl_dropped = QLabel("Dropped Frames: 0")
+        self.lbl_rec_status = QLabel("Recording: Inactive")
         self.lbl_capture_status = QLabel("Last Capture: None")
         stats_layout.addWidget(self.lbl_in_fps)
+        stats_layout.addWidget(self.lbl_proc_fps)
         stats_layout.addWidget(self.lbl_proc_time)
         stats_layout.addWidget(self.lbl_bitrate)
         stats_layout.addWidget(self.lbl_dropped)
+        stats_layout.addWidget(self.lbl_rec_status)
         stats_layout.addWidget(self.lbl_capture_status)
         stats_group.setLayout(stats_layout)
         left_panel.addWidget(stats_group)
@@ -981,18 +1055,31 @@ class ROVProcessorApp(QWidget):
         self.proc_config["record_mode"] = self.rec_mode.currentText()
         self.proc_config["source_type"] = self.source_type.currentText()
 
+        # Dynamically toggle recording while pipeline is actively running
+        if self.processing_active:
+            rec_on = self.proc_config["record_enabled"]
+            rec_mode = self.proc_config["record_mode"]
+            if self.input_thread:
+                self.input_thread.set_recording(rec_on and rec_mode == "Raw Original")
+            if self.output_thread:
+                self.output_thread.set_recording(rec_on and rec_mode == "Processed", rec_mode)
+
     def handle_thread_stats(self, stat_type, value):
         self.stats_updated.emit(stat_type, value)
 
     def update_stats_label(self, stat_type, value):
         if stat_type == "input_fps":
             self.lbl_in_fps.setText(f"Input Stream Rate: {value}")
+        elif stat_type == "proc_fps":
+            self.lbl_proc_fps.setText(f"Processed Rate: {value}")
         elif stat_type == "bitrate":
             self.lbl_bitrate.setText(f"Network Bitrate: {value}")
         elif stat_type == "proc_time":
             self.lbl_proc_time.setText(f"Processing Overhead: {value}")
         elif stat_type == "dropped":
             self.lbl_dropped.setText(f"Dropped Frames: {value}")
+        elif stat_type == "rec_status":
+            self.lbl_rec_status.setText(value)
         elif stat_type == "capture_status":
             self.lbl_capture_status.setText(f"Last Capture: {value}")
 
@@ -1023,40 +1110,21 @@ class ROVProcessorApp(QWidget):
         self.preview_label.setPixmap(QPixmap.fromImage(q_img))
 
     def take_snapshot(self):
-        """Save a snapshot of the latest active stream frame to the captures/ directory asynchronously."""
-        if not self.processing_active or self.latest_frame is None:
+        """Request an instant snapshot directly from the video processing thread with 0ms latency."""
+        if not self.processing_active or self.process_thread is None:
             self.lbl_capture_status.setText("Last Capture: Stream inactive")
-            print("Capture failed: video stream is not running or no frame available.")
+            print("Capture failed: video stream is not running.")
             return
 
-        frame_to_save = self.latest_frame.copy()
-
-        def _save_worker(frame):
-            try:
-                os.makedirs(self.capture_dir, exist_ok=True)
-                timestamp = time.strftime("%Y%m%d_%H%M%S")
-                millis = int((time.time() % 1) * 1000)
-                filename = f"ROV_Capture_{timestamp}_{millis:03d}.jpg"
-                filepath = os.path.join(self.capture_dir, filename)
-
-                # cv2.imwrite with high JPEG quality (95)
-                success = cv2.imwrite(filepath, frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
-                if success:
-                    print(f"Snapshot saved: {filepath}")
-                    self.stats_updated.emit("capture_status", filename)
-                else:
-                    print(f"Failed to write snapshot: {filepath}")
-                    self.stats_updated.emit("capture_status", "Save failed")
-            except Exception as e:
-                print(f"Error saving snapshot: {e}")
-                self.stats_updated.emit("capture_status", "Error saving")
-
-        threading.Thread(target=_save_worker, args=(frame_to_save,), daemon=True).start()
+        self.process_thread.request_snapshot(self.capture_dir, self.handle_thread_stats)
 
     def stop_pipelines(self):
         """Signal every worker to stop and wait for them, so a restart never runs two
         producers against the same queues."""
         self.latest_frame = None
+        self.lbl_rec_status.setText("Recording: Inactive")
+        self.lbl_in_fps.setText("Input Stream Rate: 0 FPS")
+        self.lbl_proc_fps.setText("Processed Rate: 0 FPS")
         for thread in (self.input_thread, self.process_thread, self.output_thread):
             if thread:
                 thread.running = False

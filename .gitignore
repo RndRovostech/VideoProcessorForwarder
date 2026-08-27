@@ -9,5 +9,6 @@ dist/
 
 # Local media captures and recordings
 captures/
+videos/
 ROV_Record_*.mp4
 CameraProcessForwarder.py.bak
