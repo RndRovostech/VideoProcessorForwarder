@@ -103,6 +103,14 @@ Tick **Enable Local Recording** and pick a mode:
 Saved beside the app as `ROV_Record_processed_<n>.mp4` or `ROV_Record_raw_<n>.mp4`, always at the
 correct speed even if the computer could not keep up.
 
+## Real-Time Snapshot Capture
+
+Click **📸 Capture Snapshot** (or press `Space`) while the stream is running to save the current frame as a high-quality JPEG.
+
+- Images are saved automatically to the `captures/` folder beside the app.
+- Filename format: `ROV_Capture_YYYYMMDD_HHMMSS_fff.jpg` (with millisecond precision).
+- Non-blocking: snapshots are written asynchronously in the background so video forwarding and preview stay smooth.
+
 ## Reading the telemetry
 
 | Readout | What it tells you | Healthy |

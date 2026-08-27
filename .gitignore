@@ -6,3 +6,8 @@ make_diagrams.py
 # PyInstaller output -- CameraProcessForwarder.spec is tracked, its products are not
 build/
 dist/
+
+# Local media captures and recordings
+captures/
+ROV_Record_*.mp4
+CameraProcessForwarder.py.bak

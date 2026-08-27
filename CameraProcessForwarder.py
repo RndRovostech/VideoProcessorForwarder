@@ -35,6 +35,13 @@ def resource_path(relative):
     return os.path.join(base, relative)
 
 
+def get_app_dir():
+    """Return the directory containing the script or frozen executable."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
 def load_app_icon():
     """Return the application icon, or an empty QIcon if the file is missing."""
     path = resource_path(APP_ICON)
@@ -151,7 +158,7 @@ def start_recorder(width, height, encoder, suffix):
     the nominal frame rate. Declaring a fixed rate instead yields a sped-up recording.
     """
     enc_codec, enc_opts = resolve_encoder(encoder)
-    rec_file = f"ROV_Record_{suffix}_{int(time.time())}.mp4"
+    rec_file = os.path.join(get_app_dir(), f"ROV_Record_{suffix}_{int(time.time())}.mp4")
     rec_cmd = [
         "ffmpeg", "-y",
         "-f", "rawvideo", "-vcodec", "rawvideo", "-pix_fmt", "bgr24",
@@ -829,6 +836,8 @@ class ROVProcessorApp(QWidget):
         self.process_thread = None
         self.output_thread = None
         self.processing_active = False
+        self.latest_frame = None
+        self.capture_dir = os.path.join(get_app_dir(), "captures")
 
         self.proc_config = {
             "resize": True,
@@ -919,16 +928,25 @@ class ROVProcessorApp(QWidget):
         self.btn_start.setStyleSheet("font-weight: bold; background-color: #2e7d32; color: white; padding: 10px;")
         left_panel.addWidget(self.btn_start)
 
+        self.btn_capture = QPushButton("📸 Capture Snapshot")
+        self.btn_capture.clicked.connect(self.take_snapshot)
+        self.btn_capture.setShortcut("Space")
+        self.btn_capture.setToolTip("Capture current frame to captures/ folder (Shortcut: Space)")
+        self.btn_capture.setStyleSheet("font-weight: bold; background-color: #1976d2; color: white; padding: 8px;")
+        left_panel.addWidget(self.btn_capture)
+
         stats_group = QGroupBox("Diagnostic Telemetry")
         stats_layout = QVBoxLayout()
         self.lbl_in_fps = QLabel("Input Stream Rate: 0 FPS")
         self.lbl_proc_time = QLabel("Processing Overhead: 0.0 ms")
         self.lbl_bitrate = QLabel("Network Bitrate: 0.00 Mbps")
         self.lbl_dropped = QLabel("Dropped Frames: 0")
+        self.lbl_capture_status = QLabel("Last Capture: None")
         stats_layout.addWidget(self.lbl_in_fps)
         stats_layout.addWidget(self.lbl_proc_time)
         stats_layout.addWidget(self.lbl_bitrate)
         stats_layout.addWidget(self.lbl_dropped)
+        stats_layout.addWidget(self.lbl_capture_status)
         stats_group.setLayout(stats_layout)
         left_panel.addWidget(stats_group)
 
@@ -975,10 +993,14 @@ class ROVProcessorApp(QWidget):
             self.lbl_proc_time.setText(f"Processing Overhead: {value}")
         elif stat_type == "dropped":
             self.lbl_dropped.setText(f"Dropped Frames: {value}")
+        elif stat_type == "capture_status":
+            self.lbl_capture_status.setText(f"Last Capture: {value}")
 
     def update_preview_window(self, frame):
         if frame is None or frame.size == 0:
             return
+
+        self.latest_frame = frame
 
         if frame.ndim == 2:
             frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
@@ -1000,9 +1022,41 @@ class ROVProcessorApp(QWidget):
         q_img = QImage(rgb_image.data, target_w, target_h, target_w * 3, QImage.Format_RGB888)
         self.preview_label.setPixmap(QPixmap.fromImage(q_img))
 
+    def take_snapshot(self):
+        """Save a snapshot of the latest active stream frame to the captures/ directory asynchronously."""
+        if not self.processing_active or self.latest_frame is None:
+            self.lbl_capture_status.setText("Last Capture: Stream inactive")
+            print("Capture failed: video stream is not running or no frame available.")
+            return
+
+        frame_to_save = self.latest_frame.copy()
+
+        def _save_worker(frame):
+            try:
+                os.makedirs(self.capture_dir, exist_ok=True)
+                timestamp = time.strftime("%Y%m%d_%H%M%S")
+                millis = int((time.time() % 1) * 1000)
+                filename = f"ROV_Capture_{timestamp}_{millis:03d}.jpg"
+                filepath = os.path.join(self.capture_dir, filename)
+
+                # cv2.imwrite with high JPEG quality (95)
+                success = cv2.imwrite(filepath, frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                if success:
+                    print(f"Snapshot saved: {filepath}")
+                    self.stats_updated.emit("capture_status", filename)
+                else:
+                    print(f"Failed to write snapshot: {filepath}")
+                    self.stats_updated.emit("capture_status", "Save failed")
+            except Exception as e:
+                print(f"Error saving snapshot: {e}")
+                self.stats_updated.emit("capture_status", "Error saving")
+
+        threading.Thread(target=_save_worker, args=(frame_to_save,), daemon=True).start()
+
     def stop_pipelines(self):
         """Signal every worker to stop and wait for them, so a restart never runs two
         producers against the same queues."""
+        self.latest_frame = None
         for thread in (self.input_thread, self.process_thread, self.output_thread):
             if thread:
                 thread.running = False
