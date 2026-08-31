@@ -12,3 +12,7 @@ captures/
 videos/
 ROV_Record_*.mp4
 CameraProcessForwarder.py.bak
+test*
+CameraProcessForwarderBlack.py.bak
+CameraProcessForwarderwithAutoCapDepth.py
+mav_node.py
