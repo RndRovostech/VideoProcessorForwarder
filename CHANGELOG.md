@@ -181,3 +181,10 @@ Keep this list. These all look like obvious fixes and are not.
   output pacer first.
 - The 0-byte and tiny `ROV_Record_*.mp4` files in the project folder are from the old raw
   recording bug. Safe to delete.
+
+## Refactor Summary
+- Switched to passive GStreamer UDP reader, removing all BlueOS REST interactions.
+- Added configurable UDP port (default 5000, user can set 4000).
+- Integrated MAVLink depth‑triggered snapshot thread into shutdown sequence.
+- Improved documentation in README to explain passive ingestion and port changes.
+- Updated snapshot handling to avoid repeated captures at stable depth (debounce note).

@@ -1,8 +1,7 @@
 # Rovostech Video Processor Forwarder
 
 Real-time video processing and forwarding for ROVs, USVs and subsea work. Takes video from a
-camera, processes it for underwater viewing, and forwards it to **QGroundControl** — optionally
-recording a local copy.
+camera, processes it for underwater viewing, optionally forwards it to **QGroundControl** and recording a local copy.
 
 It is also a **starting point for your own image processing.** Capture, threading, encoding and
 streaming are already built and measured; you write one function.
@@ -11,6 +10,17 @@ streaming are already built and measured; you write one function.
 
 To access the report, access the link below
 📖 **[View the Documentation & Guide](https://rndrovostech.github.io/VideoProcessorForwarder/report.html)**
+
+## Refactor Summary
+### Module Structure
+1. `frame_queue`
+Implements thread-safe frame buffering (FrameQueue) with synchronization locks to manage stream delivery and prevent memory leaks.
+2. `utils`
+Helper methods for logging, format conversions, and performance profiling.
+3. `VideoProcessing`
+Core engine handling image processing, deep learning model inference, and output annotations.
+4. `VideoStreamHelper`
+Manages video capture via GStreamer and handles direct stream forwarding to FFmpeg.
 
 ---
 
@@ -212,7 +222,7 @@ own buffering on top, usually 100–200 ms, outside this app's control.
 
 # 4. Add your own image processing
 
-## The one function you need
+## Apply_filter Function
 
 Find `apply_filters()` in `VideoProcessingThread`
 ([CameraProcessForwarder.py](CameraProcessForwarder.py)) and write your OpenCV code there:
@@ -231,7 +241,7 @@ def apply_filters(self, frame):
     return frame
 ```
 
-## Or subclass it, without touching the original
+## Or subclass, without touching the original
 
 Recommended — it keeps your work separate and makes updates easier:
 
@@ -416,7 +426,7 @@ These all look like sensible improvements. Each was tried and measured.
 
 ---
 
-## Project files
+
 
 | File | What it is |
 |---|---|
