@@ -1,6 +1,5 @@
 # --- Thread Safe Frame Buffer ---
-from multiprocessing import Queue
-from queue import Empty, Full
+from queue import Queue, Empty, Full
 
 # --- Thread Safe Frame Buffer ---
 class FrameQueue:

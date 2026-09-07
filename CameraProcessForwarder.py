@@ -12,7 +12,7 @@ from VideoStreamHelper import VideoInputThread, VideoOutputThread
 from VideoProcessing import VideoProcessingThread
 from frame_queue import FrameQueue
 
-PREVIEW_FPS = 15.0          # GUI preview is throttled so it can never backlog the event loop
+PREVIEW_FPS = 5.0          # GUI preview is throttled so it can never backlog the event loop
 DEFAULT_OUTPUT_FPS = 30
 
 APP_ICON = os.path.join("images", "AppIcon.ico")
@@ -280,7 +280,10 @@ class ROVProcessorApp(QWidget):
             self.btn_start.setText("Start Processing Pipeline")
             self.btn_start.setStyleSheet("font-weight: bold; background-color: #2e7d32; color: white; padding: 10px;")
         else:
-            while self.input_queue.get(0.01) is not None: pass
+            try:
+                while self.input_queue.get(0.01) is not None: pass
+            except Exception as e:
+                print("Error: ", e)
             while self.output_queue.get(0.01) is not None: pass
             self.input_queue.reset_stats()
             self.output_queue.reset_stats()

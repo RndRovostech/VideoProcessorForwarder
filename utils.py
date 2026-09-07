@@ -84,22 +84,27 @@ def parse_port(value):
         return None
     return port if 1 <= port <= 65535 else None
 
-
 def fit_to(frame, size):
     """Resize a frame only if it does not already match (width, height)."""
     if (frame.shape[1], frame.shape[0]) == size:
         return frame
     return cv2.resize(frame, size, interpolation=cv2.INTER_LINEAR)
 
+# def resolve_encoder(name):
+#     """Map the UI encoder choice onto an FFmpeg codec plus its low-latency options."""
+#     if name == "NVENC":
+#         return "h264_nvenc", ["-preset", "p1", "-tune", "ull"]
+#     if name == "Intel QSV":
+#         return "h264_qsv", ["-preset", "veryfast", "-async_depth", "1"]
+#     return "libx264", ["-preset", "ultrafast", "-tune", "zerolatency"]
 
 def resolve_encoder(name):
-    """Map the UI encoder choice onto an FFmpeg codec plus its low-latency options."""
+    """Map the UI encoder choice onto an FFmpeg codec plus high-quality surface options."""
     if name == "NVENC":
-        return "h264_nvenc", ["-preset", "p1", "-tune", "ull"]
+        return "h264_nvenc", ["-b:v", "10000k", "-maxrate", "12000k", "-bufsize", "20000k", "-preset", "p1", "-tune", "ull"]
     if name == "Intel QSV":
-        return "h264_qsv", ["-preset", "veryfast", "-async_depth", "1"]
-    return "libx264", ["-preset", "ultrafast", "-tune", "zerolatency"]
-
+        return "h264_qsv", ["-b:v", "10000k", "-preset", "veryfast", "-async_depth", "1"]
+    return "libx264", ["-b:v", "8000k", "-preset", "ultrafast", "-tune", "zerolatency"]
 
 def drain_pipe(pipe, keep=25, on_line=None):
     """Continuously consume a subprocess pipe so the OS buffer can never fill and deadlock.

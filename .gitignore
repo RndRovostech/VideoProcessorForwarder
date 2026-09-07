@@ -16,4 +16,5 @@ test*
 CameraProcessForwarderBlack.py.bak
 CameraProcessForwarderwithAutoCapDepth*
 mav_node.py
+ffmpeg_gstreamer_installer/
 
