@@ -88,155 +88,6 @@ class FFmpegFrameReader:
         if self.proc:
             close_process(self.proc, grace=0)
             self.proc = None
-class GStreamerUDPReader:
-    """Read decoded BGR frames from GStreamer for UDP RTP H.264 streams on Windows.
-
-    Passively receives UDP packets on the specified port, decodes directly via avdec_h264
-    in GStreamer, and streams raw BGR frames over a local loopback TCP socket into Python.
-    """
-
-    def __init__(self, port):
-        self.port = port
-        self.gst_proc = None
-        self.server_sock = None
-        self.client_conn = None
-        self.width = None
-        self.height = None
-        self.frame_bytes = 0
-        self.tail = deque(maxlen=25)
-        self.running = False
-
-    def open(self, timeout=8.0):
-        gst_executable = find_gstreamer_path()
-        if not gst_executable:
-            print("Error: Could not find GStreamer installation on this PC. Please verify it is installed.")
-            return False
-
-        # Sniff UDP stream for in-band SPS/PPS parameter sets
-        sprop = probe_stream_parameters(self.port, timeout=0.3)
-        if not sprop:
-            # Standard fallback parameter sets for streams that omit inline SPS/PPS
-            sprop = 'Z0LAKNoB4AiflwFqAgICgAAAAwAAAwBxiEZA,aM48gA=='
-
-        # Allocate ephemeral local TCP port for loopback BGR streaming
-        self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_sock.bind(('127.0.0.1', 0))
-        tcp_port = self.server_sock.getsockname()[1]
-        self.server_sock.listen(1)
-        self.server_sock.settimeout(timeout)
-
-        sprop_escaped = sprop.replace(',', r'\,').replace('=', r'\=')
-        caps_str = f'application/x-rtp,media=(string)video,clock-rate=(int)90000,encoding-name=(string)H264,sprop-parameter-sets=(string)"{sprop_escaped}"'
-
-        gst_cmd = [
-            gst_executable, '-v',
-            'udpsrc', f'port={self.port}',
-            f'caps={caps_str}',
-            '!', 'rtpjitterbuffer', 'latency=20',
-            '!', 'rtph264depay',
-            '!', 'h264parse',
-            '!', 'avdec_h264',
-            '!', 'videoconvert',
-            '!', 'video/x-raw,format=BGR',
-            '!', 'tcpclientsink', 'host=127.0.0.1', f'port={tcp_port}'
-        ]
-
-        print(f"Ingesting UDP RTP H264 on port {self.port} via GStreamer direct decoder...")
-        try:
-            self.gst_proc = subprocess.Popen(
-                gst_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-            )
-        except Exception as e:
-            print(f"Failed to spawn GStreamer: {e}")
-            self.release()
-            return False
-
-        found_geom = {}
-
-        def watch_stdout():
-            try:
-                for raw in iter(self.gst_proc.stdout.readline, b""):
-                    line = raw.decode("utf-8", "replace").rstrip()
-                    self.tail.append(line)
-                    if "wh" not in found_geom:
-                        m = re.search(r'video/x-raw.*?width=\(int\)(\d+).*?height=\(int\)(\d+)', line)
-                        if m:
-                            found_geom["wh"] = (int(m.group(1)), int(m.group(2)))
-            except Exception:
-                pass
-
-        threading.Thread(target=watch_stdout, daemon=True).start()
-        drain_pipe(self.gst_proc.stderr)
-
-        try:
-            self.client_conn, _ = self.server_sock.accept()
-            self.client_conn.settimeout(5.0)
-        except Exception as e:
-            print(f"GStreamer failed to connect to local stream reader: {e}")
-            self.release()
-            return False
-
-        deadline = time.time() + timeout
-        while time.time() < deadline and "wh" not in found_geom:
-            if self.gst_proc.poll() is not None:
-                break
-            time.sleep(0.02)
-
-        if "wh" not in found_geom:
-            print(f"Error: Could not determine geometry from GStreamer stream on port {self.port}.")
-            self.release()
-            return False
-
-        self.width, self.height = found_geom["wh"]
-        self.frame_bytes = self.width * self.height * 3
-        self.running = True
-        print(f"Ingesting {self.width}x{self.height} via GStreamer (direct decoder)")
-        return True
-
-    def read(self):
-        if not self.running or self.client_conn is None:
-            return None
-        buf = bytearray(self.frame_bytes)
-        view = memoryview(buf)
-        filled = 0
-        while filled < self.frame_bytes:
-            try:
-                n = self.client_conn.recv_into(view[filled:])
-            except (socket.timeout, OSError):
-                return None
-            if not n:
-                return None
-            filled += n
-        return np.frombuffer(buf, np.uint8).reshape(self.height, self.width, 3)
-
-    def release(self):
-        self.running = False
-        if self.client_conn:
-            try:
-                self.client_conn.close()
-            except Exception:
-                pass
-            self.client_conn = None
-        if self.server_sock:
-            try:
-                self.server_sock.close()
-            except Exception:
-                pass
-            self.server_sock = None
-        if self.gst_proc:
-            try:
-                self.gst_proc.terminate()
-                self.gst_proc.wait(timeout=1.0)
-            except Exception:
-                try:
-                    self.gst_proc.kill()
-                except Exception:
-                    pass
-            self.gst_proc = None
 
 # --- Thread 3: Video Transmission ---
 class VideoOutputThread(threading.Thread):
@@ -326,6 +177,9 @@ class VideoOutputThread(threading.Thread):
         size change would desync every frame that followed it.
         """
         h, w = frame.shape[:2]
+        # Force even dimensions to prevent YUV420p chroma subsampling corruption at edges
+        w = w - (w % 2)
+        h = h - (h % 2)
         self.frame_size = (w, h)
         if self.forward_enabled:
             print(f"Forwarding frame to QGroundControl on UDP port {port}")
@@ -421,6 +275,9 @@ class VideoOutputThread(threading.Thread):
             "-g", str(DEFAULT_OUTPUT_FPS),
             # Don't let the RTP muxer hold packets back (default muxdelay is 0.7s).
             "-muxdelay", "0", "-max_delay", "0",
+            # Prepend SPS/PPS extradata to every keyframe so QGroundControl immediately syncs
+            # without green/blurred macroblocks upon connection or packet recovery.
+            "-bsf:v", "dump_extra",
             "-an",
             "-nostats", "-progress", "pipe:1",
             "-f", "rtp",
@@ -501,6 +358,8 @@ class VideoInputThread(threading.Thread):
         self.encoder = encoder
         self.record_raw = record_raw
         self.running = True
+        self.gst_process = None
+        self.gst_tail = deque()
         self.record_process = None
         self.record_tail = deque()
         self.raw_size = None
@@ -521,7 +380,8 @@ class VideoInputThread(threading.Thread):
         """Resolve the configured source. Returns (cap, fps_target), or None on failure.
 
         Local files use OpenCV, which handles seeking so playback can loop. Live network
-        sources instead set self.reader (FFmpeg direct or GStreamer) and return cap=None.
+        sources instead set self.reader (FFmpeg direct) and return cap=None, because
+        cv2.VideoCapture buffers ~0.6s on them -- see FFmpegFrameReader.
         """
         if self.source_type == "Video_File":
             cap = cv2.VideoCapture(self.source_path)
@@ -532,22 +392,73 @@ class VideoInputThread(threading.Thread):
             return cap, (file_fps if file_fps > 0 else 30.0)
 
         if self.source_type == "UDP H264":
-            listen_port = parse_port(self.source_path)
-            if listen_port is None:
-                print(f"Error: '{self.source_path}' is not a valid UDP port (expected 1-65535).")
+            url = self.launch_gst_bridge()
+            if url is None:
                 return None
-            self.reader = GStreamerUDPReader(listen_port)
-            if not self.reader.open():
-                self.reader = None
-                return None
-            return None, 30.0
+        else:
+            print(f"Configuring RTSP source... to {self.source_path}")
+            url = self.source_path
 
-        print(f"Configuring RTSP source... to {self.source_path}")
-        self.reader = FFmpegFrameReader(self.source_path)
+        self.reader = FFmpegFrameReader(url)
         if not self.reader.open():
             self.reader = None
             return None
         return None, 30.0
+
+    def launch_gst_bridge(self):
+        """Start the GStreamer RTP->MPEG-TS bridge; returns its loopback URL, or None.
+
+        FFmpeg ingests raw RTP poorly without an SDP, so GStreamer depayloads the
+        incoming stream and republishes it as MPEG-TS on the next port up.
+        """
+        listen_port = parse_port(self.source_path)
+        if listen_port is None:
+            print(f"Error: '{self.source_path}' is not a valid UDP port (expected 1-65535).")
+            return None
+        if listen_port == 65535:
+            print("Error: UDP port must be below 65535 (the bridge needs port+1).")
+            return None
+        bridge_port = listen_port + 1
+
+        gst_executable = find_gstreamer_path()
+        if not gst_executable:
+            print("Error: Could not find GStreamer installation on this PC. Please verify it is installed.")
+            return None
+
+        print(f"Bridging RTP/H264 on udp:{listen_port} -> MPEG-TS on udp:{bridge_port}")
+        print(f"  using {gst_executable}")
+        gst_cmd = [
+            gst_executable, "-q",
+            "udpsrc", f"port={listen_port}",
+            # Full caps are mandatory: rtpjitterbuffer/rtph264depay cannot negotiate
+            # without media, clock-rate and encoding-name.
+            "caps=application/x-rtp,media=(string)video,clock-rate=(int)90000,encoding-name=(string)H264",
+            # Shallow jitter buffer: it is pure added latency on a short tether run.
+            # Raise it only if packet reordering causes visible tearing.
+            "!", "rtpjitterbuffer", "latency=20",
+            "!", "rtph264depay",
+            "!", "h264parse",
+            "!", "mpegtsmux",
+            "!", "udpsink", "host=127.0.0.1", f"port={bridge_port}"
+        ]
+
+        try:
+            self.gst_process = subprocess.Popen(
+                gst_cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            )
+            self.gst_tail = drain_pipe(self.gst_process.stderr)
+            time.sleep(0.5)         # let GStreamer bind the port before FFmpeg connects
+            if self.gst_process.poll() is not None:
+                report_child_failure("gstreamer", self.gst_process, self.gst_tail)
+                return None
+        except Exception as e:
+            print(f"Error launching background GStreamer process: {e}")
+            return None
+
+        return f"udp://127.0.0.1:{bridge_port}?overrun_nonfatal=1&fifo_size=50000000"
 
     def read_frame(self, cap):
         """Next frame from whichever backend this source uses, or None."""
@@ -632,4 +543,8 @@ class VideoInputThread(threading.Thread):
             self.reader = None
         close_process(self.record_process, self.record_tail, "ffmpeg-raw")
         self.record_process = None
+        if self.gst_process:
+            # gst-launch never exits on its own -- go straight to terminate
+            close_process(self.gst_process, grace=0)
+            self.gst_process = None
         self.stats_callback("rec_status", "Recording: Inactive")
